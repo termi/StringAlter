@@ -1,0 +1,25 @@
+{
+  "name": "alter",
+  "version": "0.2",
+  "description": "alters a string by replacing multiple range fragments in one fast pass",
+  "main": "alter.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/termi/alter.git"
+  },
+  "keywords": [
+    "string",
+    "manipulation",
+    "replace",
+    "alter",
+    "modify"
+  ],
+  "scripts": {
+
+  },
+  "devDependencies": {
+
+  },
+  "author": "",
+  "license": "MIT"
+}
