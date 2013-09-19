@@ -87,7 +87,7 @@ Install using npm
     npm install string-alter
 
 ```javascript
-var StringAlter = require("StringAlter");
+var StringAlter = require("string-alter");
 ```
 
 ### Browser

@@ -502,6 +502,6 @@ class StringAlter {
 	}
 }
 
-if( typeof this["module"] === "object" && this["module"] ) {
-	this["module"].exports = StringAlter;
+if (typeof module !== "undefined" && typeof module.exports !== "undefined") {
+	module.exports = StringAlter;
 }
