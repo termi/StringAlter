@@ -1,11 +1,11 @@
 {
-  "name": "alter",
-  "version": "0.2",
-  "description": "alters a string by replacing multiple range fragments in one fast pass",
-  "main": "alter.js",
+  "name": "StringAlter",
+  "version": "0.4.0",
+  "description": "String alter",
+  "main": "dist/StringAlter.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/termi/alter.git"
+    "url": "https://github.com/termi/StringAlter.git"
   },
   "keywords": [
     "string",
@@ -20,6 +20,6 @@
   "devDependencies": {
 
   },
-  "author": "",
+  "author": "Termi <1+guthub@h123.ru>",
   "license": "MIT"
 }
