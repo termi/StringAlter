@@ -313,13 +313,13 @@ describe('StringAlter', function() {
 		});
 
 		it("2", function() {
-			var string = 'let x = (a, b, c = 998) =>' +
-				'a + b + c;console.log(x(1, 1) === 1000)'
+			var string = 'let x = (a, b, c = 998) =>'
+				+ 'a + b + c;console.log(x(1, 1) === 1000)'
 				+ '\n'
 				+ 'console.log(((function(){return (a)=>a*22.032})())("321") === "321"*22.032)'
 			;
-			var expectedResult = 'var x = function(a, b)' +
-				'{var c = arguments[2];if(c === void 0)c = 998;return a + b + c};console.log(x(1, 1) === 1000)'
+			var expectedResult = 'var x = function(a, b)'
+				+ '{var c = arguments[2];if(c === void 0)c = 998;return a + b + c};console.log(x(1, 1) === 1000)'
 				+ '\n'
 				+ 'console.log(((function(){return function(a){return a*22.032}})())("321") === "321"*22.032)'
 			;
