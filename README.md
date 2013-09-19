@@ -81,6 +81,17 @@ Apply changes. Return result string
 
 ## Installation
 
+### Node
+Install using npm
+
+    npm install string-alter
+
+```javascript
+var StringAlter = require("StringAlter");
+```
+
+### Browser
+
 Clone the repo and include it in a script tag
 
     git clone https://github.com/termi/StringAlter.git
