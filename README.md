@@ -6,7 +6,7 @@ Works in node and browsers.
 
 ## Usage
 ```javascript
-    var StringAlter = require("StringAlter");
+    var StringAlter = require("string-alter");
 
     var string =
         'let x = (a, b, c = 998) =>'
