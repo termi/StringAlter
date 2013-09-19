@@ -8,7 +8,7 @@ Works in node and browsers.
 ```javascript
     var StringAlter = require("StringAlter");
 
-    var alter = StringAlter("0123456789");
+    var alter = new StringAlter("0123456789");
     alter
     	.repalce(1, 3, "first")
     	.repalce(5, 9, "second")
