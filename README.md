@@ -18,6 +18,23 @@ Works in node and browsers.
 
 The fragments does not need to be sorted but must not overlap. More examples in `test/alter-tests.js`
 
+## API
+
+```javascript
+	alter.replace(from: number, to: number, str: string)
+```
+Replace substring from between "from" and "to" positions to given one "str"
+
+```javascript
+	alter.insert(pos: number, str: string)
+```
+Insert substring to "pos" position
+
+```javascript
+	alter.wrap(from: number, to: number, begin: string, end: string)
+```
+Insert "begin" string to "from" position and "end" string to "to" position
+
 
 ## Installation
 
