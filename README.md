@@ -17,22 +17,21 @@ Works in node and browsers.
 
     var alter = new StringAlter(string);
     alter
-        .replace(0, 3, "var")
-        .insert(8, "function")
-        .remove(13, 22)
-        .remove(23, 26)
+        .replace(0, 3, "var")//'let'
+        .insert(8, "function")//'function ' + "(a, b"
+        .remove(13, 22)//', c = 998'
+        .remove(23, 26)//' =>'
         .wrap(26, 35, "{", "}", {extend: true})
         .insert(26,
-            "var "
-            + alter.get(15, 16) + " = arguments[2];if("
-            + alter.get(15, 16) + " === void 0)"
-            + alter.get(15, 16) + " = " + alter.get(19, 22) + ";"
+            "var " + alter.get(15, 16) + " = arguments[2];"		 //var c = arguments[2];
+            + "if(" + alter.get(15, 16) + " === void 0)"		 //if(c === void 0)
+            + alter.get(15, 16) + " = " + alter.get(19, 22) + ";"//c = 998;
         )
-        .insert(26, "return ")
-        .insert(98, "function")
-        .remove(101, 103)
+        .insert(26, "return ")//'return ' + "a + b + c;"
+        .insert(98, "function")//'function ' + "(a)"
+        .remove(101, 103)//'=>'
         .wrap(103, 111, "{", "}", {extend: true})
-        .insert(103, "return ")
+        .insert(103, "return ")//'return ' + "a*22.032"
     ;
     var result = alter.apply();
     result ===
@@ -44,7 +43,7 @@ Works in node and browsers.
 
 ```
 
-The fragments does not need to be sorted but must not overlap. More examples in `test/alter-tests.js`
+The fragments does not need to be sorted but must not overlap. More examples in `test`
 
 ## API
 
