@@ -276,6 +276,211 @@ describe('StringAlter', function() {
 	//	});
 	});
 
+	describe('methods', function() {
+//		TODO::
+//		it("insert", function() {
+//			var string = "0123456789";
+//			var alter = new StringAlter(string);
+//			alter
+//				.insert(1, "first")
+//			;
+//
+//			var result = alter.apply();
+//			expect(result).toEqual("0first34second9");
+//		});
+//		insertBefore
+//		insertAfter
+//		insert with options
+
+//		TODO:
+//		replace, remove, move, wrap
+
+		describe('get', function() {
+			it("string before", function() {
+				var string = "Y + X = X + 9";
+				var alter = new StringAlter(string);
+				alter
+					.replace(4, 5, "Z")
+					.replace(8, 9, alter.get(4, 5), {applyChanges: true})
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("Y + Z = Z + 9");
+			});
+
+			it("string inside", function() {
+				var string = "Y + (X + 9) = 0";
+				var alter = new StringAlter(string);
+				alter
+					.replace(5, 6, "Z")
+					.replace(4, 11, alter.get(5, 6))
+					.replace(14, 15, "-" + alter.get(9, 10))
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("Y + Z = -9");
+			});
+
+			describe("string after", function() {
+				it("simple", function() {
+					var string = "Y + X = X + 9";
+					var alter = new StringAlter(string);
+					alter
+						.replace(8, 9, "Z")
+						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
+					;
+
+					var result = alter.apply();
+					expect(result).toEqual("Y + Z = Z + 9");
+				});
+
+				it("inner", function() {
+					var string = "Y + X = X + 9";
+					var alter = new StringAlter(string);
+					alter
+						.replace(8, 9, "Z")
+						.replace(8, 9, alter.get(8, 9) + " + 5")
+						.wrap(8, 9, "(", ")", {extend: true})
+						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
+					;
+
+					var result = alter.apply();
+					expect(result).toEqual("Y + (Z + 5) = (Z + 5) + 9");
+
+					string = "Y + X = X + 9";
+					alter = new StringAlter(string);
+					alter
+						.replace(8, 9, "Z")
+						.replace(8, 9, alter.get(8, 9) + " + 5")
+						.wrap(8, 9, "(", ")")
+						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
+					;
+
+					result = alter.apply();
+					expect(result).toEqual("Y + Z + 5 = (Z + 5) + 9");
+				});
+
+				it("inner (code)", function() {
+					var string = "\n\r" +
+						"{\n\r" +
+						"	let arr,f\n\r" +
+						"}\n\r" +
+						"\n\r" +
+						"{\n\r" +
+						"	var output = [];\n\r" +
+						"	let arr = [1, 2, 3];\n\r" +
+						"	for(var f of arr ) {\n\r" +
+						"		output.push(f)\n\r" +
+						"	};\n\r" +
+						"};"
+					;
+					var expectedResult = "function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v==='object'&&typeof v['iterator']==='function')return v['iterator']();}throw new Error(v+' is not iterable')};var $D$0;var $D$1;var $D$2;\n\r" +
+						"{\n\r" +
+						"	var arr,f\n\r" +
+						"}\n\r" +
+						"\n\r" +
+						"{\n\r" +
+						"	var output = [];\n\r" +
+						"	var arr$0 = [1, 2, 3];\n\r" +
+						"	$D$0 = GET_ITER$0(arr$0);$D$1 = $D$0 === 0;$D$2 = ($D$1 ? arr$0.length : void 0);for(var f$0 ; $D$1 ? ($D$0 < $D$2) : !($D$2 = $D$0[\"next\"]())[\"done\"];  ) {f$0 = ($D$1 ? arr$0[$D$0++] : $D$2[\"value\"]);\n\r" +
+						"		output.push(f$0)\n\r" +
+						"	};;$D$0 = $D$1 = $D$2 = void 0;\n\r" +
+						"};"
+					;
+
+					var alter = new StringAlter(string);
+					alter
+						.replace(6, 9, "var")
+						.replace(45, 48, "var")
+						.replace(49, 52, "arr$0")
+						.replace(81, 84, "arr$0" )  // main change in this test, relative inner for change #OUTER
+						.replace(76, 77, "f$0")
+						.replace(104, 105, "f$0")
+						.insert(0, 'function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return v[\'iterator\']();}throw new Error(v+\' is not iterable\')};')
+						.insert(0, "var $D$0;")
+						.insert(0, "var $D$1;")
+						.insert(0, "var $D$2;")
+						.insert(68,
+							"$D$0 = GET_ITER$0("
+								+ alter.get(49, 52)
+								+ ");$D$1 = $D$0 === 0;$D$2 = ($D$1 ? "
+								+ alter.get(49, 52)
+								+ ".length : void 0);"
+							, { extend: true, applyChanges: true }
+						)
+						.replace(78, 84             //change #OUTER
+							, "; $D$1 ? ($D$0 < $D$2) : !($D$2 = $D$0[\"next\"]())[\"done\"]; "
+						)
+						.insertBefore(88, alter.get(76, 77) + " = ($D$1 ? " + alter.get(49, 52) + "[$D$0++] : $D$2[\"value\"]);")
+						.insertAfter(111, ";$D$0 = $D$1 = $D$2 = void 0;", { extend: true })
+					;
+
+					var result = alter.apply();
+					expect(result).toEqual(expectedResult);
+				});
+			});
+
+
+		});
+
+		describe("groupedFragments", function() {
+			describe("string after", function() {
+				it("inner", function() {
+					var string = "Y + X = X + 9";
+					var alter = new StringAlter(string);
+					alter
+						.replace(8, 9, "Z", {_test_parent_id: 1})
+						.replace(8, 9, "X + 5", { _test_id: 1, _test_should_have_childer: true })
+						.wrap(8, 9, "(", ")", {extend: true, _test_parent_id: 1})
+						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
+					;
+
+					var fragments = alter.groupedFragments();
+
+					expect(
+						fragments.every(function testFrag(frag) {
+							var options = (frag.options || {});
+							var id = options._test_id;
+
+							if( options._test_should_have_childer ) {
+								var subs = frag.sub();
+								if( Array.isArray(subs) && subs.length ) {
+									return subs.every(function(subFrag) {
+										var options = (subFrag.options || {});
+										var parentId = options._test_parent_id;
+
+										return parentId === id
+											&& options._test_should_have_childer
+												? testFrag(subFrag)
+												: true
+										;
+									})
+								}
+								return false;
+							}
+
+							return !!options._test_parent_id;
+						})
+					).toBe(true);
+				});
+
+				// TODO::
+//				it("inner #2", function() {
+//					var string = "18 + X/2 = 9";
+//					var alter = new StringAlter(string);
+//					alter
+//						.replace(5, 8, alter.get(5, 6) + "/2", {_test_parent_id: 1})
+//						.replace(5, 6, "X + 5", { _test_id: 1, _test_should_have_childer: true })
+//					;
+//
+//					var fragments = alter.groupedFragments();
+//
+//
+//				});
+			});
+		});
+	})
+
 	describe('code', function() {
 		it("1", function() {
 			var string = '"use strict";' +
@@ -446,6 +651,65 @@ describe('StringAlter', function() {
 			expect(result).toEqual(expectedResult);
 		});
 
+		it("5", function() {
+			var string =
+					'\n\r(function(a)[])(...[1])'
+				;
+			var expectedResult =
+					"function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v==='object'&&typeof v['iterator']==='function')return Array['from'](v);}throw new Error(v+' is not iterable')};"
+					+ "\n\r(function(a){return []}).apply(null, ITER$0([1]))"
+				;
+			var alter = new StringAlter(string);
+			alter
+				.wrap(14, 16, "{", "}", { extend: true })
+				.insert(14, "return ")
+				.insert(0, 'function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return Array[\'from\'](v);}throw new Error(v+\' is not iterable\')};')
+				.replace(2, 25, "(" + alter.get(3, 16) + ").apply(null, ITER$0(" + alter.get(21, 24) + "))")
+			;
+			var result = alter.apply();
+			expect(result).toEqual(expectedResult);
+		});
+
+		it("using transform", function() {
+			var string = '\n\r'
+				+ '{\n\r'
+				+ '	let test11 = function() (  [123, 123])\n\r'
+				+ '\n\r'
+				+ '	let test12 = function() ([1, 2])\n\r'
+				+ '\n\r'
+				+ '	let test13 = function() [1, 2]\n\r'
+				+ '\n\r'
+				+ '}\n\r'
+			;
+			var expectedResult = '\n\r'
+				+ '{\n\r'
+				+ '	let test11 = function()   {return [123, 123]}\n\r'
+				+ '\n\r'
+				+ '	let test12 = function() {return [1, 2]}\n\r'
+				+ '\n\r'
+				+ '	let test13 = function() {return [1, 2]}\n\r'
+				+ '\n\r'
+				+ '}\n\r'
+			;
+			var alter = new StringAlter(string);
+			alter
+				.replace(27, 31, alter.get(27, 31), {transform: function(str){ return "(" + str.replace(/\(/gi, "") }})
+				.wrap(33, 43, "{", "}", { extend: true })
+				.replace(43, 44, alter.get(43, 44), {transform: function(str){ return str.replace(/\)/gi, "") }})
+				.insert(33, "return ")
+
+				.replace(70, 74, alter.get(70, 74), {transform: function(str){ return "(" + str.replace(/\(/gi, "") }})
+				.wrap(74, 80, "{", "}", { extend: true })
+				.replace(80, 81, alter.get(80, 81), {transform: function(str){ return str.replace(/\)/gi, "") }})
+				.insert(74, "return ")
+
+				.wrap(110, 116, "{", "}", { extend: true })
+				.insert(110, "return ")
+			;
+			var result = alter.apply();
+			expect(result).toEqual(expectedResult);
+		});
+
 		it("get extended value", function() {
 			var string =
 				'var a = 1;\n' +
@@ -500,7 +764,7 @@ describe('StringAlter', function() {
 			var result = alter.apply();
 			expect(result).toEqual(expectedResult);
 
-			var alter = new StringAlter(string);
+			alter = new StringAlter(string);
 			alter
 				.insert(0, "var $D$0;", {before: true})
 				.insert(0, "var $D$1;", {before: true})
@@ -512,7 +776,7 @@ describe('StringAlter', function() {
 				.replace(68, 69, "a$0")
 				.replace(52, 70, "a$0 = (($D$0 = ($D$1 = (" + alter.get(64, 70) + ")).a) === void 0 ? " + alter.get(58, 59) + " : $D$0), $D$1")
 			;
-			var result = alter.apply();
+			result = alter.apply();
 			expect(result).toEqual(expectedResult);
 		});
 
@@ -525,9 +789,9 @@ describe('StringAlter', function() {
 			;
 			var expectedResult =
 				'{var a}\n' +
-				'{var a$0;var a1 = ({a1: a$0}).a1;}\n' +
-				'{var a$1;var a2 = ({a2: a$1}).a2;}\n' +
-				'{var a$2;var a3 = ({a3: a$2}).a3;}'
+				'{var a$0;var a1=({a1: a$0}).a1;}\n' +
+				'{var a$1;var a2=({a2: a$1}).a2;}\n' +
+				'{var a$2;var a3=({a3: a$2}).a3;}'
 			;
 			var alter = new StringAlter(string);
 			alter
@@ -535,18 +799,67 @@ describe('StringAlter', function() {
 				.replace(9, 12, "var")
 				.replace(13, 14, "a$0")
 				.replace(29, 30, "a$0")
-				.replace(19, 31, "a1 = (" + alter.get(24, 31) + ").a1")
+				.replace(19, 31, "a1=(" + alter.get(24, 31) + ").a1")
 				.replace(35, 38, "var")
 				.replace(39, 40, "a$1")
 				.replace(55, 56, "a$1")
-				.replace(45, 57, "a2 = (" + alter.get(50, 57) + ").a2")
+				.replace(45, 57, "a2=(" + alter.get(50, 57) + ").a2")
 				.replace(61, 64, "var")
 				.replace(65, 66, "a$2")
 				.replace(81, 82, "a$2")
-				.replace(71, 83, "a3 = (" + alter.get(76, 83) + ").a3")
+				.replace(71, 83, "a3=(" + alter.get(76, 83) + ").a3")
 			;
 
 			var result = alter.apply();
+			expect(result).toEqual(expectedResult);
+
+			alter = new StringAlter(string);
+			alter
+				.replace(1, 4, "var")
+				.replace(9, 12, "var")
+				.replace(13, 14, "a$0")
+				.replace(29, 30, "a$0")
+				.replace(19, 23, "a1")
+				.wrap(24, 31, "(", ").a1")
+				.replace(35, 38, "var")
+				.replace(39, 40, "a$1")
+				.replace(55, 56, "a$1")
+				.replace(45, 49, "a2")
+				.wrap(50, 57, "(", ").a2")
+				.replace(61, 64, "var")
+				.replace(65, 66, "a$2")
+				.replace(81, 82, "a$2")
+				.replace(71, 75, "a3")
+				.wrap(76, 83, "(", ").a3")
+			;
+
+			result = alter.apply();
+			expect(result).toEqual(expectedResult);
+
+			alter = new StringAlter(string);
+			alter
+				.replace(1, 4, "var")
+				.replace(9, 12, "var")
+				.replace(13, 14, "a$0")
+				.replace(29, 30, "a$0")
+				.replace(19, 23, "a1")
+				.insert(24, "(")
+				.insert(31, ").a1")
+				.replace(35, 38, "var")
+				.replace(39, 40, "a$1")
+				.replace(55, 56, "a$1")
+				.replace(45, 49, "a2")
+				.insert(50, "(")
+				.insert(57, ").a2")
+				.replace(61, 64, "var")
+				.replace(65, 66, "a$2")
+				.replace(81, 82, "a$2")
+				.replace(71, 75, "a3")
+				.insert(76, "(")
+				.insert(83, ").a3")
+			;
+
+			result = alter.apply();
 			expect(result).toEqual(expectedResult);
 		});
 
@@ -661,6 +974,321 @@ describe('StringAlter', function() {
 			expect(result).toEqual(expectedResult);
 		});
 	});
+
+
+	describe("__ NEW FEATURES __", function() {
+		describe("new apply sequence logic", function() {
+			it("inner changes before get", function() {
+				var string =
+						'function test0(y = 1, [{x}, {z}] = [{x: 2}, {z: 3}]) {\n\r'
+							+ '\n\r'
+							+ '}\n\r'
+					;
+				var expectedResult =
+						'function test0() {var y = arguments[0];if(y === void 0)y = 1;var x = (z = (arguments[1] !== void 0 ? arguments[1] : [{x: 2}, {z: 3}]))[0].x, z = (z[1]).z;\n\r'
+							+ '\n\r'
+							+ '}\n\r'
+					;
+				var alter = new StringAlter(string);
+				alter
+					.insert(25, ": x")	//inner changes
+					.insert(30, ": z")	//inner changes
+					.remove(15, 20)
+					.remove(20, 51)//group for inner changes
+					.insert(54			//get
+						, 'var y = arguments[0];if(y === void 0)y = ' + alter.get(19, 20) + ';var x = (z = (arguments[1] !== void 0 ? arguments[1] : ' + alter.get(35, 51) + '))[0].x, z = (z[1]).z;'
+						, {__newTransitionalSubLogic: true}
+					)
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner inner changes before get 1", function() {
+				var string =
+					'function test0(y = 1, [{x}, {z}] = (()=>[{x: 2}, {z: 3}])()) {\n\r'
+					+ '\n\r'
+					+ '}\n\r'
+				;
+				var expectedResult =
+					'function test0() {var y = arguments[0];if(y === void 0)y = 1;var x = (z = (arguments[1] !== void 0 ? arguments[1] : (function(){return [{x: 2}, {z: 3}]})()))[0].x, z = (z[1]).z;\n\r'
+					+ '\n\r'
+					+ '}\n\r'
+				;
+				var alter = new StringAlter(string);
+				alter
+					.insert(25, ": x")	//inner changes
+					.insert(30, ": z")	//inner changes
+
+					.remove(15, 20)
+					.remove(20, 59)//group for inner changes
+					.insert(62			//get
+						, 'var y = arguments[0];if(y === void 0)y = ' + alter.get(19, 20) + ';var x = (z = (arguments[1] !== void 0 ? arguments[1] : ' + alter.get(35, 59) + '))[0].x, z = (z[1]).z;'
+						, {__newTransitionalSubLogic: true}
+					)
+
+					.insert(36, "function")
+					.remove(38, 40, "")
+					.insertBefore(40, "{", {extend: true})
+					.insert(56, "}", {extend: true})
+					.insert(40, "return ")
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner inner changes before get 2", function() {
+				var string =
+					'{\n\r'
+					+ '\tlet a = [...(function(a = 2){  })()];\n\r'
+					+ '}\n\r'
+				;
+				var expectedResult =
+					'function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return Array[\'from\'](v);}throw new Error(v+\' is not iterable\')};{\n\r'
+					+ '\tvar a = [].concat(ITER$0((function(){var a = arguments[0];if(a === void 0)a = 2;  })()));\n\r'
+					+ '}\n\r'
+				;
+
+
+				var alter = new StringAlter(string);
+				alter
+					.replace(4, 7, "var")
+					.remove(26, 31)
+					.insert(33, "var a = arguments[0];if(a === void 0)a = " + alter.get(30, 31) + ";", { __newTransitionalSubLogic: true })
+					.insertBefore(0, "function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return Array[\'from\'](v);}throw new Error(v+\' is not iterable\')};")
+					.replace(12, 40, "[].concat(ITER$0(" + alter.get(16, 39) + "))")
+
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner inner changes before get 3", function() {
+				var string =
+					'"use strict";'
+					+ '\n\r'
+					+ '\n\rfunction test1(a, b    , c    ) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test1(1);'
+					+ '\n\r'
+					+ '\n\rfunction test2(a/*, {b: {c}} = {b: {c: 321}}*/) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test2(1);'
+					+ '\n\r'
+					+ '\n\rfunction test4(a    , b /*= 44444456, c = 1, ...rest*/) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test4(void 0, void 0, void 0, 9, 8, 7, 6, 5, 4);'
+					+ '\n\r'
+					+ '\n\rfunction test5(a , b/* = 444*/, test = (function({A}){ return  {test: A} })({A: [1]})) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test5(void 0, void 0, void 0, 9, 8, 7, 6, 5, 4);'
+					+ '\n\r'
+				;
+				var expectedResult =
+					'"use strict";'
+					+ '\n\r'
+					+ '\n\rfunction test1(a, b    , c    ) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test1(1);'
+					+ '\n\r'
+					+ '\n\rfunction test2(a/*, {b: {c}} = {b: {c: 321}}*/) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test2(1);'
+					+ '\n\r'
+					+ '\n\rfunction test4(a    , b /*= 44444456, c = 1, ...rest*/) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test4(void 0, void 0, void 0, 9, 8, 7, 6, 5, 4);'
+					+ '\n\r'
+					+ '\n\rfunction test5(a , b) {var test = arguments[2];if(test === void 0)test = (function($D$0){var A = $D$0.A; return  {test: A} })({A: [1]});'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test5(void 0, void 0, void 0, 9, 8, 7, 6, 5, 4);'
+					+ '\n\r'
+				;
+
+
+				var alter = new StringAlter(string);
+				alter
+					.insert(312, ": A")
+					.remove(281, 346)
+					.insert(349, "var test = arguments[2];if(test === void 0)test = " + alter.get(300, 346) + ";", { __newTransitionalSubLogic: true })
+					.replace(310, 313, "$D$0")
+					.insert(315, "var A = $D$0.A;", { __newTransitionalSubLogic: true })
+
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner inner changes before get 4", function() {
+				var string =
+					'"use strict";'
+					+ '\n\r'
+					+ '\n\rfunction test1(/*------------------*/) {'
+					+ '\n\r//	console.log(a === 1, typeof b === "object" && b.c === 1, c === 1);'
+					+ '\n\r}'
+					+ '\n\r//test1()'
+					+ '\n\r'
+					+ '\n\rfunction test2(/*-----------------------*/) {'
+					+ '\n\r//	console.log(a === 1, c === 321);'
+					+ '\n\r}'
+					+ '\n\r//test2()'
+					+ '\n\r'
+					+ '\n\rfunction test3(/*----------------------------------------------------------*/) {'
+					+ '\n\r'
+					+ '\n\r'
+					+ '\n\r	{'
+					+ '\n\r		var c = [{test: "test1"}, {test: "test2"}];'
+					+ '\n\r		c.forEach(function inner(test  , index, thisArray) {'
+					+ '\n\r'
+					+ '\n\r		})'
+					+ '\n\r	}'
+					+ '\n\r}'
+					+ '\n\rtest3();'
+					+ '\n\r'
+					+ '\n\rfunction test4(/*a, b = {c: 333}, {c: d}= b, ...rest*/)  {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test4(void 0, void 0, void 0, 9, 8, 7, 6, 5,4)'
+					+ '\n\r'
+					+ '\n\rfunction test5(a/*=1*/,b/*={c: 333}*/,test = (function( A )(/*----------------*/{test: A} ))({A: [1      ]})) {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\rtest5(/*------------------------------------*/);'
+					+ '\n\r'
+				;
+				var expectedResult =
+					'"use strict";'
+					+ '\n\r'
+					+ '\n\rfunction test1(/*------------------*/) {'
+					+ '\n\r//	console.log(a === 1, typeof b === "object" && b.c === 1, c === 1);'
+					+ '\n\r}'
+					+ '\n\r//test1()'
+					+ '\n\r'
+					+ '\n\rfunction test2(/*-----------------------*/) {'
+					+ '\n\r//	console.log(a === 1, c === 321);'
+					+ '\n\r}'
+					+ '\n\r//test2()'
+					+ '\n\r'
+					+ '\n\rfunction test3(/*----------------------------------------------------------*/) {'
+					+ '\n\r'
+					+ '\n\r'
+					+ '\n\r	{'
+					+ '\n\r		var c = [{test: "test1"}, {test: "test2"}];'
+					+ '\n\r		c.forEach(function inner(test  , index, thisArray) {'
+					+ '\n\r'
+					+ '\n\r		})'
+					+ '\n\r	}'
+					+ '\n\r}'
+					+ '\n\rtest3();'
+					+ '\n\r'
+					+ '\n\rfunction test4(/*a, b = {c: 333}, {c: d}= b, ...rest*/)  {'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\r//test4(void 0, void 0, void 0, 9, 8, 7, 6, 5,4)'
+					+ '\n\r'
+					+ '\n\rfunction test5(a/*=1*/,b) {var test = arguments[2];if(test === void 0)test = (function( A )/*----------------*/{return {test: A}}}  )({A: [1      ]});'
+					+ '\n\r'
+					+ '\n\r}'
+					+ '\n\rtest5(/*------------------------------------*/);'
+					+ '\n\r'
+				;
+
+				var alter = new StringAlter(string);
+				alter
+					.remove(607, 691)
+					.insert(694, "var test = arguments[2];if(test === void 0)test = " + alter.get(628, 691) + ";", { __newTransitionalSubLogic: true })
+					.replace(
+						640
+						, 663
+						, alter.get(640, 663)
+						, {
+							transformUniq: 1
+							, transform: function(str) {
+								return str.replace(/\(/gi, "");
+							}
+						}
+					)
+					.insertBefore(663, "{", { extend: true })
+					.insert(672, "}", { extend: true })
+					.replace(
+						672
+						, 674
+						, alter.get(672, 674)
+						, {
+							transformUniq: 2
+							, transform: function(str) {
+								return str.replace(/\)/gi, " ");
+							}
+						}
+					)
+					.insert(663, "return ", { __newTransitionalSubLogic: true })
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+		});
+	});
+
+
+
+
+	// TODO:: implement Exceptions
+//	describe("Exceptions", function() {
+//		describe("get / string after", function() {
+//			it("inner (code)", function() {
+//				var string = "\n\r" +
+//					"{\n\r" +
+//					"	let arr\n\r" +
+//					"}\n\r" +
+//					"\n\r" +
+//					"{\n\r" +
+//					"	var output = [];\n\r" +
+//					"	let arr = [1, 2, 3];\n\r" +
+//					"	for(var f of arr ) {\n\r" +
+//					"		output.push(f)\n\r" +
+//					"	};\n\r" +
+//					"}\n\r" +
+//					";"
+//				;
+//				var alter = new StringAlter(string);
+//				alter
+//					.replace(6, 9, "var")
+//					.replace(43, 46, "var")
+//					.replace(47, 50, "arr$0")
+//					.replace(79, 82, "arr$0")// ERROR#1 !! @link ERROR#2
+//					.insert(0, 'function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return v[\'iterator\']();}throw new Error(v+\' is not iterable\')};')
+//					.insert(0, "var $D$0;")
+//					.insert(0, "var $D$1;")
+//					.insert(0, "var $D$2;")
+//					.insert(66,
+//					"var "
+//						+ alter.get(74, 75)
+//						+ ";$D$0 = GET_ITER$0("
+//						+ alter.get(79, 82)
+//						+ ");$D$1 = $D$0 === 0;$D$2 = ($D$1 ? "
+//						+ alter.get(79, 82)
+//						+ ".length : void 0);"
+//					, { extend: true, applyChanges: true }
+//				)
+//					.replace(76, 82			// ERROR#2 !! Substring 79,82 is already mark to modify @link ERROR#1
+// 						, "; $D$1 ? ($D$0 < $D$2) : !($D$2 = $D$0[\"next\"]())[\"done\"]; ")
+//					.insertBefore(86, "f = ($D$1 ? " + alter.get(79, 82) + "[$D$0++] : $D$2[\"value\"]);")
+//					.insertAfter(109, ";$D$0 = $D$1 = $D$2 = void 0;", { extend: true })
+//				;
+//
+//				var result = alter.apply();
+//				expect(result).toThrow("<TODO: message>");
+//			});
+//		});
+//	});
 });
 
 
