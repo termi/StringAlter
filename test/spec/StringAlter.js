@@ -430,8 +430,8 @@ describe('StringAlter', function() {
 					var alter = new StringAlter(string);
 					alter
 						.replace(8, 9, "Z", {_test_parent_id: 1})
-						.replace(8, 9, "X + 5", { _test_id: 1, _test_should_have_childer: true })
 						.wrap(8, 9, "(", ")", {extend: true, _test_parent_id: 1})
+						.replace(8, 9, "X + 5", { _test_id: 1, _test_should_have_childer: true })
 						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
 					;
 
@@ -459,7 +459,7 @@ describe('StringAlter', function() {
 								return false;
 							}
 
-							return !!options._test_parent_id;
+							return !options._test_parent_id;
 						})
 					).toBe(true);
 				});
@@ -1230,6 +1230,30 @@ describe('StringAlter', function() {
 						}
 					)
 					.insert(663, "return ", { __newTransitionalSubLogic: true })
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner inner changes before get 5", function() {
+				var string =
+					'const {b} = (function(...args){return ({b: args[1]})})(...[,1]);'
+				;
+				var expectedResult =
+					'function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return Array[\'from\'](v);}throw new Error(v+\' is not iterable\')};var b = ((function(){var SLICE$0 = Array.prototype.slice;var args = SLICE$0.call(arguments, 0);return ({b: args[1]})}).apply(null, ITER$0([,1]))).b;'
+				;
+
+
+				var alter = new StringAlter(string);
+				alter
+					.replace(0, 5, "var")
+					.insertBefore(31, "var SLICE$0 = Array.prototype.slice;")
+					.remove(22, 29)
+					.insert(31, "var args = SLICE$0.call(arguments, 0);", { __newTransitionalSubLogic: true })
+					.insertBefore(0, 'function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;if(typeof v===\'object\'&&typeof v[\'iterator\']===\'function\')return Array[\'from\'](v);}throw new Error(v+\' is not iterable\')};')
+					.replace(12, 63, "(" + alter.get(13, 53) + ").apply(null, ITER$0(" + alter.get(58, 62) + "))")
+					.replace(6,  63, "b = (" + alter.get(12, 63) + ").b")
+
 				;
 				var result = alter.apply();
 				expect(result).toEqual(expectedResult);

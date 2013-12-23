@@ -580,10 +580,10 @@ class StringAlter {
 		if( !offsets.length ) {
 			return pos;
 		}
-		return this.updateRecord({from: pos, to: pos}, offsets, true).from;
+		return this.updateRecord({from: pos, to: pos}, offsets, true, true).from;
 	}
 
-	updateRecord({from, to}, offsets = this._offsets, considerExtends = false) {//TODO:: optimize function speed
+	updateRecord({from, to}, offsets = this._offsets, offsetValuesDelimiter = this._source.length, considerExtends = false) {//TODO:: optimize function speed
 		if( offsets && offsets.length ) {
 			let positionOffset = 0;
 			let originalFrom = from + positionOffset, originalTo = to + positionOffset;
@@ -593,15 +593,22 @@ class StringAlter {
 				offset = offset | 0;
 
 				let offsetValue = offsets[offset];
-				let extendValue = offsetValue | 0;
-				let addingValue;
+				let extendValue = 0;
+				let addingValue = 0;
 
-				if( offsetValue > extendValue ) {
+				if( typeof offsetValue === "string" ) {
 					offsetValue += "";
-					let index = offsetValue.indexOf(".");
+					let index = offsetValue.indexOf("|");
 					if( index !== -1 ) {//adding
-						addingValue = +(offsetValue.substr(index + 1));
+						addingValue = offsetValue.substr(index + 1) | 0;
+						extendValue = offsetValue.substr(0, index) | 0;
 					}
+					else {
+						extendValue = offsetValue | 0;
+					}
+				}
+				else {
+					extendValue = offsetValue | 0;
 				}
 
 				if( offset <= originalTo ) {// must be <=
@@ -691,6 +698,7 @@ class StringAlter {
 		let fragments = this._fragments;
 		let sourceString = this._source;
 		let fragmentsLength = fragments.length;
+		let sourceStringLength = sourceString.length;
 
 		if( fragmentsLength && (fragments[0].originalIndex === void 0 || forcePreparation === true) ) {
 			let fragmentsGroups = Object.create(null);
@@ -816,8 +824,11 @@ class StringAlter {
 			let frag = fragments[index];
 			let fragOptions = (frag.options || {});
 
-			if( typeof fragOptions.before === "function" ) {
-				fragOptions.before.call(frag);
+			if( typeof fragOptions.onbefore === "function" ) {
+				let beforeOut = fragOptions.onbefore.call(frag, fragOptions, frag.data);
+				if( beforeOut !== void 0 ) {
+					frag.data = beforeOut;
+				}
 			}
 
 			let expressionsLength = frag.extractData(this._records);
@@ -926,35 +937,41 @@ class StringAlter {
 			if( offset ) {
 				let newIsAdding = to === from && !fragOptions.extend
 					, newIndex = frag.record.from
-					, value = offsets[newIndex] || 0
-					, insertingValue = value | 0
-					, addingValue
+					, offsetValue = offsets[newIndex] || 0
+					, addingValue = 0
+					, extendValue = 0
 				;
 
-				value += "";
-				let index = value.indexOf(".");
-				if( index !== -1 ) {//adding
-					addingValue = +(value.substr(index + 1));
+				if( typeof offsetValue === "string" ) {
+					offsetValue += "";
+					let index = offsetValue.indexOf("|");
+					if( index !== -1 ) {//adding
+						addingValue = offsetValue.substr(index + 1) | 0;
+						extendValue = offsetValue.substr(0, index) | 0;
+					}
+					else {
+						extendValue = offsetValue | 0;
+					}
 				}
 				else {
-					addingValue = 0;
+					extendValue = offsetValue | 0;
 				}
 
 				if( newIsAdding ) {
 					addingValue += offset;
 				}
 				else {
-					insertingValue += offset;
+					extendValue += offset;
 				}
 
 				if( addingValue ) {
-					value = (insertingValue + "." + addingValue);
+					extendValue = (extendValue + "|" + addingValue);
 				}
 				else {
-					value = insertingValue;
+					extendValue = extendValue;
 				}
 
-				offsets[newIndex] = value;
+				offsets[newIndex] = extendValue;
 			}
 
 			if( pos !== from ) {

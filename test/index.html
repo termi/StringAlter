@@ -20,8 +20,11 @@
 
 
 	<script type="text/javascript">
-		traceur.options.experimental = true;
-		new traceur.WebPageProject(document.location.href).run();
+		if( typeof traceur === "object" ) {
+			traceur.options.experimental = true;
+			new traceur.WebPageProject(document.location.href).run();
+		}
+
 
 		(function run(tryCounter) {
 			if( typeof StringAlter != "function" ) {

@@ -1,6 +1,6 @@
 {
   "name": "string-alter",
-  "version": "0.6.1",
+  "version": "0.6.3",
   "description": "String alter",
   "main": "dist/StringAlter.js",
   "repository": {
