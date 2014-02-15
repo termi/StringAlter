@@ -293,7 +293,7 @@ describe('StringAlter', function() {
 //		insert with options
 
 //		TODO:
-//		replace, remove, move, wrap
+//		replace, move, wrap
 
 		describe('get', function() {
 			it("string before", function() {
@@ -334,7 +334,7 @@ describe('StringAlter', function() {
 					expect(result).toEqual("Y + Z = Z + 9");
 				});
 
-				it("inner", function() {
+				it("inner 1", function() {
 					var string = "Y + X = X + 9";
 					var alter = new StringAlter(string);
 					alter
@@ -346,9 +346,11 @@ describe('StringAlter', function() {
 
 					var result = alter.apply();
 					expect(result).toEqual("Y + (Z + 5) = (Z + 5) + 9");
+				});
 
-					string = "Y + X = X + 9";
-					alter = new StringAlter(string);
+				it("inner 2", function() {
+					var string = "Y + X = X + 9";
+					var alter = new StringAlter(string);
 					alter
 						.replace(8, 9, "Z")
 						.replace(8, 9, alter.get(8, 9) + " + 5")
@@ -356,8 +358,39 @@ describe('StringAlter', function() {
 						.replace(4, 5, alter.get(8, 9), {applyChanges: true})
 					;
 
-					result = alter.apply();
+					var result = alter.apply();
 					expect(result).toEqual("Y + Z + 5 = (Z + 5) + 9");
+				});
+
+				it("inner 3", function() {
+					var string = "(1 + 3) + X = 6";
+					var alter = new StringAlter(string);
+					alter
+						.replace(0, 7, "4")
+						.remove(7, 10)
+						.insertBefore(15, " - ")
+						.move(0, 7, 15)
+					;
+
+					var result = alter.apply();
+					expect(result).toEqual("X = 6 - 4");
+				});
+
+				it("inner and changes after apply", function() {
+					var string = "(1 + 3) + X = 6";
+					var alter = new StringAlter(string);
+					alter
+						.replace(0, 7, "4")
+						.remove(7, 10)
+						.insertBefore(15, " - ")
+						.insert(15, alter.get(0, 7), {__newTransitionalSubLogic: true})
+					;
+
+					alter.apply();
+					alter.remove(0, 7);
+					
+					var result = alter.apply();
+					expect(result).toEqual("X = 6 - 4");
 				});
 
 				it("inner (code)", function() {
@@ -479,6 +512,143 @@ describe('StringAlter', function() {
 //				});
 			});
 		});
+
+		describe('remove', function() {
+			it("step-by-step", function() {
+				var string = "let x = [1, ...[2, 3], ... [...[4, 5]]];";
+				var alter = new StringAlter(string);
+				alter
+					.remove(12, 16)
+					.remove(20, 21)
+					.remove(23, 28)
+					.remove(28, 32)
+					.remove(36, 37)
+					.remove(37, 38)
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("let x = [1, 2, 3, 4, 5];");
+			});
+
+			it("with insert/get", function() {
+				var string =
+						'function t(a = [...a]) {}'
+					;
+				var alter = new StringAlter(string);
+				alter
+					.remove(11, 21)
+					.insert(24, "var arr = arguments[0];if(arr === void 0)arr = " + alter.get(15, 21) + ";", {"__newTransitionalSubLogic":true})
+					.insertBefore(24, "function ITER$0(v){return v}")
+					.remove(15, 19)
+					.insertBefore(19, 'ITER$0(')
+					.remove(20, 21)//remove last ']'
+					.insert(20, ')')
+				;
+				var result = alter.apply();
+				expect(result).toEqual("function t() {function ITER$0(v){return v}var arr = arguments[0];if(arr === void 0)arr = ITER$0(a);}");
+			});
+
+			it("with insert/get/replace", function() {
+				var string = "function test(arr = [...a, ...a]) { return arr }";
+				var alter = new StringAlter(string);
+				alter
+					.insert(35, 'var arr = arguments[0];if(arr === void 0)arr = ' + alter.get(20, 32) + ';', { __newTransitionalSubLogic: true })
+					.insert(35, 'function ITER$0(v){return v};', { before: true } )
+					.remove(21, 24)
+					.insert(24, ' ].concat(ITER$0(', { before: true })
+					.insert(25, ', true)')
+					.replace(25, 30, ', ITER$0(')
+					.insert(31, '))', {before: true})
+					.remove(31, 32)
+				;
+
+				alter.apply();
+				alter.remove(14, 32);
+				var result = alter.apply();
+
+				expect(result).toEqual("function test() {function ITER$0(v){return v};var arr = arguments[0];if(arr === void 0)arr = [ ].concat(ITER$0(a, true), ITER$0(a)); return arr }");
+			});
+
+//			it("with move", function() {
+//				var string = "let x = [1, ...[2, 3], ... [...[4, 5]]];";
+//				var alter = new StringAlter(string);
+//				alter
+//					.TODO
+//				;
+//
+//				var result = alter.apply();
+//				expect(result).toEqual("let x = [1, 2, 3, 4, 5];");
+//			});
+		});
+
+		describe('setState/restoreState', function() {
+			it("remove/insert", function() {
+				var string = "function t({c: d} = 1, ...rest){}";
+				var alter = new StringAlter(string);
+				alter
+					.setState('default_remove')
+						.remove(11, 21)
+					.restoreState()
+					.setState('default_remove')
+						.remove(21, 30)
+					.restoreState()
+
+					.insertBefore(32, 'var SLICE$0 = Array.prototype.slice;')
+					.insert
+						(32
+						, 'var d = (arguments[0] !== void 0 ? arguments[0] : ' + alter.get(20, 21) + ').c;var rest = SLICE$0.call(arguments, 1);'
+						, { __newTransitionalSubLogic: true }
+					)
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("function t(){var SLICE$0 = Array.prototype.slice;var d = (arguments[0] !== void 0 ? arguments[0] : 1).c;var rest = SLICE$0.call(arguments, 1);}");
+
+				string = "var a = [];function test(arr = [...a, ...a]) { return arr }";
+				alter = new StringAlter(string);
+				alter
+					.insert
+						(46
+						, 'var arr = arguments[0];if(arr === void 0)arr = ' + alter.get(31, 43) + ';'
+						, { __newTransitionalSubLogic: true }
+					)
+					.insertBefore(46, 'function ITER$0(v){return v};')
+					.remove(32, 35)
+					.insertBefore(35, ' ].concat(ITER$0(')
+					.insert(36, ', true)')
+					.replace(36, 41, ', ITER$0(')
+					.insert(42, '))')
+					.remove(42, 43)
+					.setState('default_remove')
+						.remove(25, 43)
+					.restoreState()
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("var a = [];function test() {function ITER$0(v){return v};var arr = arguments[0];if(arr === void 0)arr = [ ].concat(ITER$0(a, true), ITER$0(a)); return arr }");
+			});
+
+			it("remove in another stage after insert/replace", function() {
+				var string = "var y1 = (a = 1) => (  a + 1  , a  )";
+				var alter = new StringAlter(string);
+				alter
+					.insert(9, 'function')
+					.replace(15, 23, alter.get(15, 23), {transformUniq: 1, transform: function(str) { return str.replace(/=>/gi, "").replace(/\(/gi, "") }})
+					.insertBefore(23, '{', {extend: true})
+					.insert(36, '}', {extend: true})
+					.insert(23, 'var a = arguments[0];if(a === void 0)a = ' + alter.get(14, 15) + ';return (', {"__newTransitionalSubLogic":true})
+					.setState('default_remove')
+						.remove(10, 15)
+					.restoreState()
+				;
+
+				var result = alter.apply();
+				expect(result).toEqual("var y1 = function()    {var a = arguments[0];if(a === void 0)a = 1;return (a + 1  , a  )}");
+
+			});
+		});
+
+
 	})
 
 	describe('code', function() {
@@ -668,6 +838,45 @@ describe('StringAlter', function() {
 			;
 			var result = alter.apply();
 			expect(result).toEqual(expectedResult);
+		});
+
+		it("6", function() {
+			var string =
+					'var a = [1, 2];\n\r'
+					+ 'function t(arr = [...a, ...(([a, b = 4], c = 3)=>[a, b, c])([a[1]+1]), ...a.reverse()]) {  }'
+				;
+			var alter = new StringAlter(string);
+			alter
+				.remove(28, 103)
+				.insert(106, "var arr = arguments[0];if(arr === void 0)arr = " + alter.get(34, 103) + ";", {"__newTransitionalSubLogic":true})
+				.insert(45, "function")
+				//.replace(63, 66, alter.get(63, 66), {"transformUniq":1, transform: function(str) { return str.replace(/=>/gi, "  ").replace(/\)/gi, ")") }})
+				.replace(63, 66, ")")
+				.insertBefore(66, "{", {"extend":true})
+				.insert(75, "}", {"extend":true})
+				.replace(46, 56, "b")
+				.remove(56, 63)
+				.insert(
+					66
+					, 'var a = b[0], b = ((b = b[1]) === void 0 ? '
+						+ alter.get(54, 55)
+						+ ' : b);var c = arguments[1];if(c === void 0)c = '
+						+ alter.get(62, 63)
+						+ ';return '
+					, {"__newTransitionalSubLogic":true}
+				)
+				.insertBefore(106, "function ITER$0(v){return v}")
+				.remove(35, 38)
+				.insertBefore(38, " ].concat(ITER$0(")
+				.insert(39, ", true)")
+				.replace(39, 44, ", ITER$0(")
+				.insert(86, ")")
+				.replace(86, 91, ", ITER$0(")
+				.insert(102, "))")
+				.remove(102, 103)
+			;
+			var result = alter.apply();
+			expect(result).toEqual("var a = [1, 2];\n\rfunction t() {function ITER$0(v){return v}var arr = arguments[0];if(arr === void 0)arr = [ ].concat(ITER$0(a, true), ITER$0((function(b){var a = b[0], b = ((b = b[1]) === void 0 ? 4 : b);var c = arguments[1];if(c === void 0)c = 3;return [a, b, c]})([a[1]+1])), ITER$0(a.reverse()));  }");
 		});
 
 		it("using transform", function() {

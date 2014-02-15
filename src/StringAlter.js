@@ -1,10 +1,6 @@
 "use strict";
 
-var assert = this["assert"] || function(expect, msg) {
-	if( expect != true ) {
-		throw new Error(msg || "");
-	}
-};
+let assert = this["assert"] || ((expect, msg) => { if(expect != true)throw new Error(msg || "") });
 
 class Record {
 	constructor(from, to) {
@@ -72,7 +68,7 @@ class Fragment {
 			return 0;
 		}
 
-		let {from: fragmentFrom, to: fragmentTo} = this.record;
+		let { record: {from: fragmentFrom, to: fragmentTo} } = this;
 
 		let data = this.data;
 		let fragmentsLen;
@@ -94,7 +90,7 @@ class Fragment {
 
 			data = data + "";
 
-			data.replace(Record.uniqueRE, function(str, from, to, offset) {
+			data.replace(Record.uniqueRE, (str, from, to, offset) => {
 				fragmentsLen++;
 
 				from |= 0;
@@ -127,7 +123,7 @@ class Fragment {
 				newData.push(data.substring(prevOffset, offset));
 
 				prevOffset = offset + str.length;
-			}.bind(this));
+			});
 
 			if( newData ) {
 				newData.push(data.substring(prevOffset));//tail
@@ -150,17 +146,23 @@ Fragment.Types = {replace: 1, insert: 2, remove: 3 };
 
 class StringAlter {
 	constructor(source, fragments = [], offsets = [], recordsCache = {}) {
-		this._source = new String(source);//TODO:: [new get logic] after new get logic completed replace it to this._source = source
-		this.reset(fragments, offsets, recordsCache);
+		this.reset(
+			new String(source)//TODO:: [new get logic] after new get logic completed replace it to this._source = source
+			, fragments
+			, offsets
+			, recordsCache
+		);
 	}
 
-	reset(fragments = [], offsets = [], recordsCache = {}) {
+	reset(source = '', fragments = [], offsets = [], recordsCache = {}, fragmentStatesArray = []) {
+		this._source = source;
 		this._fragments = fragments;
 		this._offsets = offsets;
 		this._fragmentStates = {};
-		this._fragmentStatesArray = [];
-		this.__prevStateName = this.__currentStateName = void 0;
+		this._fragmentStatesArray = fragmentStatesArray;
+		this.__prevStateName = this.__currentStateName = void 0;//"$" + Math.random() * 1e9 | 0 + "$";
 		this._fragmentsGroupId = 0;
+		this._removedBlocks = {};
 
 		this._index = {
 			indexFrom: []
@@ -344,10 +346,13 @@ class StringAlter {
 		}
 
 		if( fromPendingValue ) {
-			result.push.apply(result, this._findRecordFragments(fromPendingValue, toPendingValue, true));
+			result.push(...this._findRecordFragments(fromPendingValue, toPendingValue, true));
 		}
 
-		return doNotSort ? result : result.sort(function(a, b){return (a.__createdIndex - b.__createdIndex)});
+		return doNotSort
+			? result
+			: result.sort( ({__createdIndex: a}, {__createdIndex: b}) => (a - b) )
+		;
 	}
 
 	_findFragmentRecords(fragmentFrom, fragmentTo) {
@@ -449,6 +454,8 @@ class StringAlter {
 	 * @returns {Record}
 	 */
 	get(from, to) {
+		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+
 		let recordKey = from + "|" + to;
 		if( this._records[recordKey] ) {
 			return this._records[recordKey];
@@ -467,6 +474,18 @@ class StringAlter {
 		record._source = this._source;//TODO:: [new get logic] after new get logic completed remove this line
 
 		return record;
+	}
+
+	/**
+	 *
+	 * @param {number} from
+	 * @param {number} to
+	 * @returns {string}
+	 */
+	getRange(from, to) {
+		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+		
+		return this._source.substring(from, to);
 	}
 
 	/**
@@ -513,6 +532,14 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	remove(from, to, options) {
+		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+		
+		if( this._removedBlocks[from + "|" + to] !== void 0 ) {
+			// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
+			assert(false, 'This string block has already been removed');
+		}
+		this._removedBlocks[from + "|" + to] = null;
+
 		this._createFragment(from, to, "", Fragment.Types.remove, options);
 		return this;
 	}
@@ -526,6 +553,8 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	move(srcFrom, srcTo, destination, options) {
+		assert(srcFrom <= srcTo, 'srcFrom(' + srcFrom + ') should be <= srcTo(' + srcTo + ')');
+
 		this.remove(srcFrom, srcTo);
 		this.insert(destination, this.get(srcFrom, srcTo), options);
 		return this;
@@ -540,6 +569,8 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	replace(from, to, data, options) {
+		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+
 		if( from == to ) {
 			return this.insert(from, data, options);
 		}
@@ -559,6 +590,8 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	wrap(from, to, start, end, options = {}) {
+		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+		
 		options.group = ++this._fragmentsGroupId;
 
 		let firstInsertOptions = Object.create(options);
@@ -566,6 +599,29 @@ class StringAlter {
 
 		this.insert(from, start, firstInsertOptions);//TODO::insertBefore
 		this.insert(to, end, options);//TODO::insertAfter
+		return this;
+	}
+
+	setState(newStateName) {
+		if( !this._fragmentStates[newStateName] ) {
+			this._fragmentStatesArray.push(this._fragmentStates[newStateName] = []);
+		}
+		if( !this._fragmentStates[this.__currentStateName] ) {
+			this._fragmentStates[this.__currentStateName] = this._fragments;
+		}
+		this.__prevStateName = this.__currentStateName;
+		this.__currentStateName = newStateName;
+		this._fragments = this._fragmentStates[newStateName];
+
+		return this;
+	}
+
+	restoreState() {
+		var frags = this._fragmentStates[this.__currentStateName = this.__prevStateName];
+		if( frags ) {
+			this._fragments = frags;
+		}
+
 		return this;
 	}
 
@@ -589,7 +645,7 @@ class StringAlter {
 			let originalFrom = from + positionOffset, originalTo = to + positionOffset;
 
 			for( let offset in offsets ) if( offsets.hasOwnProperty(offset) ) {
-				// Fast enumeration through array MAY CAUSE PROBLEM WITH WRONG ORDER OF ARRAY ITEM, but it is unlikely
+				// Fast enumeration through sparse array MAY CAUSE PROBLEM WITH WRONG ORDER OF ARRAY ITEM, but it is unlikely
 				offset = offset | 0;
 
 				let offsetValue = offsets[offset];
@@ -638,31 +694,32 @@ class StringAlter {
 
 	groupedFragments(fragments = this._fragments) {
 		let lastStart, lastEnd, groupFrag, groupFragIndex;
+		
 		for( let fragmentsLength = fragments.length - 1 ; fragmentsLength >= 0 ;  fragmentsLength-- ) {
 			let frag = fragments[fragmentsLength];
 			let {from, to} = frag.record;
 			let groupFragExtend = groupFrag && groupFrag.type !== Fragment.Types.insert
 				, currFragExtend = frag.type !== Fragment.Types.insert || (frag.options || {}).extend
-				;
+			;
 
-			if( lastEnd &&
-				(
+			if( lastEnd
+				&& (
 					from > lastStart && to < lastEnd
-						|| (groupFragExtend && currFragExtend && (from >= lastStart && to <= lastEnd))
-					)
-				) {
+					|| (groupFragExtend && currFragExtend && (from >= lastStart && to <= lastEnd))
+				)
+			) {
 				groupFrag.sub(frag);
 				fragments.splice(fragmentsLength, 1);
 			}
-			else if( lastEnd &&
-				(
+			else if( lastEnd &&	(
 					from < lastStart && to > lastEnd
-						|| (groupFragExtend && currFragExtend && (from <= lastStart && to >= lastEnd))
-					)
-				) {
+					|| (groupFragExtend && currFragExtend && (from <= lastStart && to >= lastEnd)) )
+			) {
 				frag.sub(groupFrag);
 				fragments.splice(groupFragIndex, 1);
 				groupFrag = frag;
+				lastStart = from;
+				lastEnd = to;
 			}
 			else {
 				lastStart = from;
@@ -674,38 +731,22 @@ class StringAlter {
 		return fragments;
 	}
 
-	setState(newStateName) {
-		if( !this._fragmentStates[newStateName] ) {
-			this._fragmentStatesArray.push(this._fragmentStates[newStateName] = []);
-		}
-		if( !this._fragmentStates[this.__currentStateName] ) {
-			this._fragmentStates[this.__currentStateName] = this._fragments;
-		}
-		this.__prevStateName = this.__currentStateName;
-		this.__currentStateName = newStateName;
-		this._fragments = this._fragmentStates[newStateName];
-	}
-
-	restoreState() {
-		var frags = this._fragmentStates[this.__currentStateName = this.__prevStateName];
-		if( frags ) {
-			this._fragments = frags;
-		}
-	}
-
 	apply(forcePreparation = false) {
 		let offsets = this._offsets;
 		let fragments = this._fragments;
 		let sourceString = this._source;
 		let fragmentsLength = fragments.length;
 		let sourceStringLength = sourceString.length;
+		
+//		console.log(this.printFragments(fragments ).join("\n"), "\n-------------============stages============-------------\n", this._fragmentStatesArray.reduce(function(arr, fragments){ arr.push.apply(arr, this.printFragments(fragments));return arr }.bind(this), []).join("\n"))
+//		console.log(fragments)
 
 		if( fragmentsLength && (fragments[0].originalIndex === void 0 || forcePreparation === true) ) {
 			let fragmentsGroups = Object.create(null);
 			for( let index = 0 ; index < fragmentsLength ;  index++ ) {
 				let frag = fragments[index];
 
-				let fragmentOptions = frag.options || {};
+				let {options: fragmentOptions = {}} = frag;
 
 				if( fragmentOptions["inactive"] === true ) {//TODO: tests
 					fragments.splice(index, 1);
@@ -740,8 +781,8 @@ class StringAlter {
 				let result = aStart - bStart;
 
 				if( result === 0 ) {
-					let {reverse: aReverse, priority: aPriority, extend: aExtend, before: aBefore, after: aAfter} = (a.options || {});
-					let {reverse: bReverse, priority: bPriority, extend: bExtend, before: bBefore, after: bAfter} = (b.options || {});
+					let { reverse: aReverse, priority: aPriority, extend: aExtend, before: aBefore, after: aAfter } = a.options || {};
+					let { reverse: bReverse, priority: bPriority, extend: bExtend, before: bBefore, after: bAfter } = b.options || {};
 
 					if( aBefore === true || bBefore === true ) {
 						if( aBefore === bBefore ) {
@@ -814,6 +855,7 @@ class StringAlter {
 		;
 
 		if( pos !== 0 ) {
+			if( pos < 0 ) pos = 0;// 'pos' can be < 0 (due offsets) - ignoring this case
 			outsStr = sourceString.slice(0, pos);
 		}
 
@@ -822,7 +864,7 @@ class StringAlter {
 
 		for (let index = 0; index < fragmentsLength; index++) {
 			let frag = fragments[index];
-			let fragOptions = (frag.options || {});
+			let {options: fragOptions = {}} = frag;
 
 			if( typeof fragOptions.onbefore === "function" ) {
 				let beforeOut = fragOptions.onbefore.call(frag, fragOptions, frag.data);
@@ -867,6 +909,7 @@ class StringAlter {
 					, this._records
 				);
 				sourceString = subAlter.apply();
+				subAlter.reset();
 
 				let offsetPos = this.updatePosition(clearPos, offsets);
 
@@ -900,6 +943,7 @@ class StringAlter {
 						if( subFragments ) {
 							let alter = new StringAlter(sourceString, subFragments, [-record.from]);
 							sourceString = alter.apply(true);
+							alter.reset();
 						}
 						string += (record.__raw = sourceString);
 					}
@@ -936,7 +980,7 @@ class StringAlter {
 			let offset = string.length - ( to - from );
 			if( offset ) {
 				let newIsAdding = to === from && !fragOptions.extend
-					, newIndex = frag.record.from
+					, newIndex = frag.record.from + ( offset < 0 ? -offset - 1 : 0)// needs to inc index for negative offset
 					, offsetValue = offsets[newIndex] || 0
 					, addingValue = 0
 					, extendValue = 0
@@ -980,7 +1024,7 @@ class StringAlter {
 			outs.push(string);
 
 			pos = to;
-			({to: clearPos}) = frag.record;
+			({ record: {to: clearPos} }) = frag;
 		}
 		if (pos < sourceString.length) {
 			outs.push(sourceString.slice(pos));
@@ -990,20 +1034,38 @@ class StringAlter {
 
 		this._fragmentStatesArray.unshift(postFragments);
 
+		this.reset(sourceString, void 0, this._offsets, void 0, this._fragmentStatesArray);
+
 		while( postFragments = this._fragmentStatesArray.shift() ) {
 			if( postFragments.length ) {
-				let subAlter = new StringAlter(
-					sourceString
-					, postFragments
-					, this._offsets
-				);
-				sourceString = subAlter.apply();
+				this._fragments = postFragments;
+				this.apply();
 			}
 		}
 
-		this.reset();
+		return this._source;
+	}
+	
+	toString() {
+		return this._source;
+	}
 
-		return sourceString;
+	printFragments(fragments = this._fragments) {
+		let result = [];
+		for( let frag of fragments ) {
+			let {type, record} = frag, {remove, insert} = Fragment.Types
+
+			result.push(
+				`${remove === type ? "REMOVE" : insert === type ? "INSERT" : "REPLACE"}:\t`
+				+ `[${record.from}${insert !== type ? ", " + record.to : ""}]`
+				+ `exp: ${(frag.expressions || []).length} | `
+				+ `index: ${frag.__createdIndex} | `
+				+ `opt: ${JSON.stringify(frag.options)}`
+				+ `${remove !== type ? "\\n  data: '" + frag.data + "'" : ""} | `
+			);
+		}
+
+		return result;
 	}
 }
 
