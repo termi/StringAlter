@@ -1,6 +1,7 @@
 "use strict";
 
 let assert = this["assert"] || ((expect, msg) => { if(expect != true)throw new Error(msg || "") });
+var assign = /*Object['assign'] || */(t, s) => {for(var p in s){if(s.hasOwnProperty(p)){t[p]=s[p];}}return t};
 
 class RangeIndex {
 	constructor() {
@@ -492,20 +493,24 @@ class Fragment {
 
 		return fragmentsLen;
 	}
+
+	setOptions(options) {
+		if( !this.options )this.options = {};
+
+		assign(this.options, options);
+	}
 }
-Fragment.Types = {replace: 1, insert: 2, remove: 3 };
+Fragment.Types = {replace: 1, insert: 2, remove: 3, 1: 'replace', 2: 'insert', 3: 'remove'};
 
 class StringAlter {
-	constructor(source, fragments = [], offsets = new RangeOffset(), recordsCache = {}) {
+	constructor(source, options) {
 		this.reset(
 			new String(source)//TODO:: [new get logic] after new get logic completed replace it to this._source = source
-			, fragments
-			, offsets
-			, recordsCache
+			, options
 		);
 	}
 
-	reset(source = '', fragments = [], offsets = new RangeOffset(), recordsCache = {}, fragmentStatesArray = []) {
+	reset(source = '', {fragments = [], offsets = new RangeOffset(), records = {}, fragmentStatesArray = [], policy = {}} = {}) {
 		if( this._fragments == fragments ) {
 			// no needs to reindex
 		}
@@ -518,11 +523,11 @@ class StringAlter {
 			}
 		}
 
-		if( this._records == recordsCache ) {
+		if( this._records == records ) {
 			// no needs to reindex
 		}
 		else {
-			this._records = recordsCache;
+			this._records = records;
 			this._getRecorsIndex = new RangeIndex();
 
 			// TODO::
@@ -540,6 +545,8 @@ class StringAlter {
 		this.__prevStateName = this.__currentStateName = void 0;//"$" + Math.random() * 1e9 | 0 + "$";
 		this._fragmentsGroupId = 0;
 		this._removedBlocks = {};
+
+		this.policy = assign(assign({}, StringAlter.defaultPolicy), policy);
 	}
 
 	_createFragment(from, to, data, type, options) {
@@ -557,6 +564,8 @@ class StringAlter {
 		to |= 0;
 
 		let fragment = new Fragment(from, to, data + "", type);
+
+		this.checkFragmentRange(fragment);
 
 		if( options ) {
 			fragment.options = options;
@@ -662,14 +671,6 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	remove(from, to, options) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
-		if( this._removedBlocks[from + "|" + to] !== void 0 ) {
-			// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
-			assert(false, 'This string block has already been removed');
-		}
-		this._removedBlocks[from + "|" + to] = null;
-
 		this._createFragment(from, to, "", Fragment.Types.remove, options);
 		return this;
 	}
@@ -699,8 +700,6 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	replace(from, to, data, options) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
 		if( from == to ) {
 			return this.insert(from, data, options);
 		}
@@ -720,8 +719,6 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	wrap(from, to, start, end, options = {}) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
 		options.group = ++this._fragmentsGroupId;
 
 		let firstInsertOptions = Object.create(options);
@@ -967,9 +964,7 @@ class StringAlter {
 
 				let subAlter = new StringAlter(
 					outsStr + sourceString.slice(pos, from) + sourceString.slice(from, to) + sourceString.substring(to)
-					, subFragments
-					, this._offsets
-					, this._records
+					, {fragments: subFragments, offsets: this._offsets, records: this._records, policy: this.policy}
 				);
 				sourceString = subAlter.apply();
 				subAlter.reset();
@@ -1006,7 +1001,13 @@ class StringAlter {
 						let sourceString = record._source.substring(record.from, record.to);//this._source.substring(record.from, record.to);
 						let subFragments = record.getSubs();
 						if( subFragments ) {
-							let alter = new StringAlter(sourceString, subFragments, new RangeOffset([-record.from]));
+							let alter = new StringAlter(sourceString
+								, {
+									fragments: subFragments
+									, offsets: new RangeOffset([-record.from])
+									, policy: this.policy
+								}
+							);
 							sourceString = alter.apply(true);
 							alter.reset();
 						}
@@ -1068,7 +1069,7 @@ class StringAlter {
 
 		this._fragmentStatesArray.unshift(postFragments);
 
-		this.reset(sourceString, void 0, this._offsets, void 0, this._fragmentStatesArray);
+		this.reset(sourceString, {offsets: this._offsets, fragmentStatesArray: this._fragmentStatesArray, policy: this.policy});
 
 		while( postFragments = this._fragmentStatesArray.shift() ) {
 			if( postFragments.length ) {
@@ -1101,6 +1102,90 @@ class StringAlter {
 
 		return result;
 	}
+
+	checkFragmentRange(fragment) {
+		// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
+
+		const REMOVE = Fragment.Types.remove;
+		const REPLACE = Fragment.Types.replace;
+
+		let {record: {from, to}, type} = fragment;
+		const isReplace = type === REPLACE;
+		const isRemove = type === REMOVE;
+
+		let typeString = Fragment.Types[type];
+		let {policy} = this;
+
+		// check rule: range check
+		if( !(from <= to) ) {
+			let {fromMoreThanTo} = policy;
+			if( fromMoreThanTo !== 'allow' ) {
+				if( fromMoreThanTo === 'exclude' ) {
+					fragment.setOptions({"inactive": true});
+				}
+				else {
+					assert(false, 'from(' + from + ') should be <= to(' + to + ')');
+				}
+			}
+		}
+
+		if( isRemove ) {
+			// check rule: unique remove
+			let {unUniqueRemove} = policy;
+			if( unUniqueRemove !== 'allow' ) {
+				if( this._removedBlocks[from + "|" + to] !== void 0 ) {
+
+					if( unUniqueRemove === 'exclude' ) {
+						fragment.setOptions({"inactive": true});
+					}
+					else {
+						assert(false, 'This string block has already been removed');
+					}
+				}
+			}
+			// passing data for next checking
+			this._removedBlocks[from + "|" + to] = null;
+		}
+
+		if( isRemove || isReplace ) {
+			// check rule: inner changes - remove or replace inside remove or replace
+			if( policy['__eraseInErase__allow'] === void 0 ) {
+				// caching value to improve performance (eraseInErase is allowed by default)
+				policy['__eraseInErase__allow'] = policy.eraseInErase == 'allow';
+			}
+
+			if( policy['__eraseInErase__allow'] === false ) {
+				let {eraseInErase} = policy;
+				let filterSignificantFragment = ({type, options = {}}) => (!options.inactive && (type === REMOVE || type === REPLACE));
+
+				let outerFragments = this._fragmentsIndex.findOuter(from, to, filterSignificantFragment);
+
+				if( outerFragments.length ) {
+					if( eraseInErase === 'exclude' ) {
+						fragment.setOptions({"inactive": true});
+					}
+					else {
+						assert(false, `This fragment with type ${typeString} is located in another fragment`);
+					}
+				}
+
+				let innerFragments = this._fragmentsIndex.find(from, to, filterSignificantFragment);
+				if( innerFragments.length ) {
+					if( eraseInErase === 'exclude' ) {
+						innerFragments.forEach( (fragment) => (fragment.setOptions({"inactive": true})) );
+					}
+					else {
+						assert(false, `This fragment with type ${typeString} is covers another fragments`);
+					}
+				}
+			}
+		}
+	}
+}
+StringAlter.defaultPolicy = {
+	'fromMoreThanTo': 'error'
+	, 'unUniqueRemove': 'error'
+	, 'eraseInErase': 'allow'
 }
 
 if (typeof module !== "undefined" && typeof module.exports !== "undefined") {

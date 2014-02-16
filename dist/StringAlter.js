@@ -1,6 +1,7 @@
 var SLICE$0 = Array.prototype.slice;function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;var i,r;if(typeof v==='object'&&typeof v['@@iterator']==='function'){i=v['@@iterator'](),r=[];while((f=i['next']()),f['done']!==true)r.push(f['value']);return r;}}throw new Error(v+' is not iterable')};function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v==='object'&&typeof v['@@iterator']==='function')return v['@@iterator']();}throw new Error(v+' is not iterable')};"use strict";
 
 var assert = this["assert"] || (function(expect, msg)  { if(expect != true)throw new Error(msg || "") });
+var assign = /*Object['assign'] || */function(t, s)  {for(var p in s){if(s.hasOwnProperty(p)){t[p]=s[p];}}return t};
 
 var RangeIndex = (function(){
 	function RangeIndex() {
@@ -492,20 +493,24 @@ var Fragment = (function(){
 
 		return fragmentsLen;
 	}
+
+	Fragment.prototype.setOptions = function(options) {
+		if( !this.options )this.options = {};
+
+		assign(this.options, options);
+	}
 ;return Fragment;})();
-Fragment.Types = {replace: 1, insert: 2, remove: 3 };
+Fragment.Types = {replace: 1, insert: 2, remove: 3, 1: 'replace', 2: 'insert', 3: 'remove'};
 
 var StringAlter = (function(){
-	function StringAlter(source) {var fragments = arguments[1];if(fragments === void 0)fragments = [];var offsets = arguments[2];if(offsets === void 0)offsets = new RangeOffset();var recordsCache = arguments[3];if(recordsCache === void 0)recordsCache = {};
+	function StringAlter(source, options) {
 		this.reset(
 			new String(source)//TODO:: [new get logic] after new get logic completed replace it to this._source = source
-			, fragments
-			, offsets
-			, recordsCache
+			, options
 		);
 	}
 
-	StringAlter.prototype.reset = function() {var source = arguments[0];if(source === void 0)source = '';var fragments = arguments[1];if(fragments === void 0)fragments = [];var offsets = arguments[2];if(offsets === void 0)offsets = new RangeOffset();var recordsCache = arguments[3];if(recordsCache === void 0)recordsCache = {};var fragmentStatesArray = arguments[4];if(fragmentStatesArray === void 0)fragmentStatesArray = [];
+	StringAlter.prototype.reset = function() {var source = arguments[0];if(source === void 0)source = '';var fragments = ((fragments = (policy = (arguments[1] !== void 0 ? arguments[1] : {})).fragments) === void 0 ? [] : fragments), offsets = ((offsets = policy.offsets) === void 0 ? new RangeOffset() : offsets), records = ((records = policy.records) === void 0 ? {} : records), fragmentStatesArray = ((fragmentStatesArray = policy.fragmentStatesArray) === void 0 ? [] : fragmentStatesArray), policy = ((policy = policy.policy) === void 0 ? {} : policy);
 		if( this._fragments == fragments ) {
 			// no needs to reindex
 		}
@@ -518,11 +523,11 @@ var StringAlter = (function(){
 			}
 		}
 
-		if( this._records == recordsCache ) {
+		if( this._records == records ) {
 			// no needs to reindex
 		}
 		else {
-			this._records = recordsCache;
+			this._records = records;
 			this._getRecorsIndex = new RangeIndex();
 
 			// TODO::
@@ -540,6 +545,8 @@ var StringAlter = (function(){
 		this.__prevStateName = this.__currentStateName = void 0;//"$" + Math.random() * 1e9 | 0 + "$";
 		this._fragmentsGroupId = 0;
 		this._removedBlocks = {};
+
+		this.policy = assign(assign({}, StringAlter.defaultPolicy), policy);
 	}
 
 	StringAlter.prototype._createFragment = function(from, to, data, type, options) {var $D$20;var $D$21;var $D$22;var $D$23;
@@ -557,6 +564,8 @@ var StringAlter = (function(){
 		to |= 0;
 
 		var fragment = new Fragment(from, to, data + "", type);
+
+		this.checkFragmentRange(fragment);
 
 		if( options ) {
 			fragment.options = options;
@@ -662,14 +671,6 @@ var StringAlter = (function(){
 	 * @returns {StringAlter}
 	 */
 	StringAlter.prototype.remove = function(from, to, options) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
-		if( this._removedBlocks[from + "|" + to] !== void 0 ) {
-			// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
-			assert(false, 'This string block has already been removed');
-		}
-		this._removedBlocks[from + "|" + to] = null;
-
 		this._createFragment(from, to, "", Fragment.Types.remove, options);
 		return this;
 	}
@@ -699,8 +700,6 @@ var StringAlter = (function(){
 	 * @returns {StringAlter}
 	 */
 	StringAlter.prototype.replace = function(from, to, data, options) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
 		if( from == to ) {
 			return this.insert(from, data, options);
 		}
@@ -720,8 +719,6 @@ var StringAlter = (function(){
 	 * @returns {StringAlter}
 	 */
 	StringAlter.prototype.wrap = function(from, to, start, end) {var options = arguments[4];if(options === void 0)options = {};
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-
 		options.group = ++this._fragmentsGroupId;
 
 		var firstInsertOptions = Object.create(options);
@@ -967,9 +964,7 @@ var StringAlter = (function(){
 
 				var subAlter = new StringAlter(
 					outsStr + sourceString.slice(pos, from) + sourceString.slice(from, to) + sourceString.substring(to)
-					, subFragments
-					, this._offsets
-					, this._records
+					, {fragments: subFragments, offsets: this._offsets, records: this._records, policy: this.policy}
 				);
 				sourceString = subAlter.apply();
 				subAlter.reset();
@@ -1006,7 +1001,13 @@ var StringAlter = (function(){
 						var sourceString$0 = record._source.substring(record.from, record.to);//this._source.substring(record.from, record.to);
 						var subFragments$0 = record.getSubs();
 						if( subFragments$0 ) {
-							var alter = new StringAlter(sourceString$0, subFragments$0, new RangeOffset([-record.from]));
+							var alter = new StringAlter(sourceString$0
+								, {
+									fragments: subFragments$0
+									, offsets: new RangeOffset([-record.from])
+									, policy: this.policy
+								}
+							);
 							sourceString$0 = alter.apply(true);
 							alter.reset();
 						}
@@ -1068,7 +1069,7 @@ var StringAlter = (function(){
 
 		this._fragmentStatesArray.unshift(postFragments);
 
-		this.reset(sourceString, void 0, this._offsets, void 0, this._fragmentStatesArray);
+		this.reset(sourceString, {offsets: this._offsets, fragmentStatesArray: this._fragmentStatesArray, policy: this.policy});
 
 		while( postFragments = this._fragmentStatesArray.shift() ) {
 			if( postFragments.length ) {
@@ -1101,7 +1102,91 @@ var StringAlter = (function(){
 
 		return result;
 	}
+
+	StringAlter.prototype.checkFragmentRange = function(fragment) {
+		// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
+
+		var REMOVE = Fragment.Types.remove;
+		var REPLACE = Fragment.Types.replace;
+
+		var from = (to = fragment.record).from, to = to.to, type = fragment.type;
+		var isReplace = type === REPLACE;
+		var isRemove = type === REMOVE;
+
+		var typeString = Fragment.Types[type];
+		var policy = (this).policy;
+
+		// check rule: range check
+		if( !(from <= to) ) {
+			var fromMoreThanTo = policy.fromMoreThanTo;
+			if( fromMoreThanTo !== 'allow' ) {
+				if( fromMoreThanTo === 'exclude' ) {
+					fragment.setOptions({"inactive": true});
+				}
+				else {
+					assert(false, 'from(' + from + ') should be <= to(' + to + ')');
+				}
+			}
+		}
+
+		if( isRemove ) {
+			// check rule: unique remove
+			var unUniqueRemove = policy.unUniqueRemove;
+			if( unUniqueRemove !== 'allow' ) {
+				if( this._removedBlocks[from + "|" + to] !== void 0 ) {
+
+					if( unUniqueRemove === 'exclude' ) {
+						fragment.setOptions({"inactive": true});
+					}
+					else {
+						assert(false, 'This string block has already been removed');
+					}
+				}
+			}
+			// passing data for next checking
+			this._removedBlocks[from + "|" + to] = null;
+		}
+
+		if( isRemove || isReplace ) {
+			// check rule: inner changes - remove or replace inside remove or replace
+			if( policy['__eraseInErase__allow'] === void 0 ) {
+				// caching value to improve performance (eraseInErase is allowed by default)
+				policy['__eraseInErase__allow'] = policy.eraseInErase == 'allow';
+			}
+
+			if( policy['__eraseInErase__allow'] === false ) {
+				var eraseInErase = policy.eraseInErase;
+				var filterSignificantFragment = function(options)  {var type = options.type, options = ((options = options.options) === void 0 ? {} : options);return !options.inactive && (type === REMOVE || type === REPLACE)} ;
+
+				var outerFragments = this._fragmentsIndex.findOuter(from, to, filterSignificantFragment);
+
+				if( outerFragments.length ) {
+					if( eraseInErase === 'exclude' ) {
+						fragment.setOptions({"inactive": true});
+					}
+					else {
+						assert(false, (("This fragment with type " + typeString) + " is located in another fragment"));
+					}
+				}
+
+				var innerFragments = this._fragmentsIndex.find(from, to, filterSignificantFragment);
+				if( innerFragments.length ) {
+					if( eraseInErase === 'exclude' ) {
+						innerFragments.forEach( function(fragment)  {return fragment.setOptions({"inactive": true})}  );
+					}
+					else {
+						assert(false, (("This fragment with type " + typeString) + " is covers another fragments"));
+					}
+				}
+			}
+		}
+	}
 ;return StringAlter;})();
+StringAlter.defaultPolicy = {
+	'fromMoreThanTo': 'error'
+	, 'unUniqueRemove': 'error'
+	, 'eraseInErase': 'allow'
+}
 
 if (typeof module !== "undefined" && typeof module.exports !== "undefined") {
 	module.exports = StringAlter;

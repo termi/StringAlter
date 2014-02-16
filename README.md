@@ -46,6 +46,10 @@ Works in node and browsers.
 The fragments does not need to be sorted but must not overlap. More examples in `test`
 
 ## API
+```javascript
+var alter = new StringAlter(string: source, Object: options?);
+// options is optional. See 'StringAlter options'
+```
 
 ```javascript
 alter.replace(from: number, to: number, str: string): StringAlter
@@ -76,6 +80,25 @@ Get substring from original string wrapped in special object with toString funct
 alter.apply(): string
 ```
 Apply changes. Return result string
+
+## StringAlter options
+```javascript
+{
+	policy: {}// see 'Changes policy'
+}
+```
+
+### Changes policy
+```javascript
+{
+	"ruleName": resolve//resolve should be "allow" or "exclude", or any other value which will be interpreted as "error"
+}
+```
+This is a set of rules that can `allow` or `exclude` some unobvious changes
+
+ * `fromMoreThanTo` (default: 'error') - when changes start position is is larger than end position
+ * `unUniqueRemove` (default: 'error') - second `remove` call for already removed fragment (with the same method parameter values)
+ * `eraseInErase` (default: 'allow') - `remove` or `replace` inside another `remove` or `replace`
 
 
 ## Installation
