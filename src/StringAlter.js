@@ -213,6 +213,154 @@ class RangeIndex {
 	}
 }
 
+class RangeOffset {
+	constructor(offsets = []) {
+		this.offsets = offsets;
+	}
+
+	addInsert(to, offset) {
+		this.addRange(to, to, offset, true);
+	}
+
+	addRemove(from, to) {
+		while( from++ < to ) {
+			this.addRange(void 0, from, -1);
+		}
+	}
+
+	addRange(from, to, offset, newIsAdding = false) {
+		if( !offset ) {
+			return;
+		}
+
+		if( offset < 0 ) {
+			// TODO:: new logic [START]
+//			if( offset < -1 ) {
+//				this.addRemove(to + offset, to);
+//				return;
+//			}
+//
+//			from = to;
+			// TODO:: new logic [END]
+
+			// this is an old logic:
+			from = from + (-offset - 1);
+		}
+
+
+		let {offsets} = this;
+
+		let offsetValue = offsets[from] || 0
+			, addingValue = 0
+			, extendValue = 0
+		;
+
+		if( typeof offsetValue === "string" ) {
+			offsetValue += "";
+			let index = offsetValue.indexOf("|");
+			if( index !== -1 ) {//adding
+				addingValue = offsetValue.substr(index + 1) | 0;
+				extendValue = offsetValue.substr(0, index) | 0;
+			}
+			else {
+				extendValue = offsetValue | 0;
+			}
+		}
+		else {
+			extendValue = offsetValue | 0;
+		}
+
+		if( newIsAdding ) {
+			addingValue += offset;
+		}
+		else {
+			extendValue += offset;
+		}
+
+		if( addingValue ) {
+			extendValue = `${extendValue}|${addingValue}`;
+		}
+		else {
+			extendValue = extendValue;
+		}
+
+		offsets[from] = extendValue;
+	}
+
+	clone() {
+		return new RangeOffset(this.offsets.slice())
+	}
+
+	/**
+	 *
+	 * @param pos
+	 * @param {Array=} offsets
+	 * @returns {*}
+	 */
+	getPosition(pos) {
+		return this.getRange(pos, pos, true).from;
+	}
+
+	getRecord({from, to}, considerExtends) {
+		return this.getRange(from, to, considerExtends);
+	}
+
+	getRange(from, to, considerExtends = false) {//TODO:: optimize function speed
+		let {offsets} = this;
+
+		if( offsets.length ) {
+			let positionOffset = 0;
+			let originalFrom = from + positionOffset, originalTo = to + positionOffset;
+
+			for( let offset in offsets ) if( offsets.hasOwnProperty(offset) ) {
+				// Fast enumeration through sparse array MAY CAUSE PROBLEM WITH WRONG ORDER OF ARRAY ITEM, but it is unlikely
+				offset = offset | 0;
+
+				let offsetValue = offsets[offset];
+				let extendValue = 0;
+				let addingValue = 0;
+
+				if( typeof offsetValue === "string" ) {
+					offsetValue += "";
+					let index = offsetValue.indexOf("|");
+					if( index !== -1 ) {//adding
+						addingValue = offsetValue.substr(index + 1) | 0;
+						extendValue = offsetValue.substr(0, index) | 0;
+					}
+					else {
+						extendValue = offsetValue | 0;
+					}
+				}
+				else {
+					extendValue = offsetValue | 0;
+				}
+
+				if( offset <= originalTo ) {// must be <=
+					if( offset <= originalFrom) {// must be <=
+						if( considerExtends || offset !== originalFrom ) {
+							from += extendValue;
+						}
+						if( addingValue ) {
+							from += addingValue;
+						}
+					}
+
+					to += extendValue;
+					if( offset !== originalTo && addingValue ) {
+						to += addingValue;
+					}
+
+				}
+				else {
+					break;
+				}
+			}
+		}
+
+		return {from, to};
+	}
+}
+
 class Record {
 	constructor(from, to) {
 		this.from = from;
@@ -348,7 +496,7 @@ class Fragment {
 Fragment.Types = {replace: 1, insert: 2, remove: 3 };
 
 class StringAlter {
-	constructor(source, fragments = [], offsets = [], recordsCache = {}) {
+	constructor(source, fragments = [], offsets = new RangeOffset(), recordsCache = {}) {
 		this.reset(
 			new String(source)//TODO:: [new get logic] after new get logic completed replace it to this._source = source
 			, fragments
@@ -357,7 +505,7 @@ class StringAlter {
 		);
 	}
 
-	reset(source = '', fragments = [], offsets = [], recordsCache = {}, fragmentStatesArray = []) {
+	reset(source = '', fragments = [], offsets = new RangeOffset(), recordsCache = {}, fragmentStatesArray = []) {
 		if( this._fragments == fragments ) {
 			// no needs to reindex
 		}
@@ -607,73 +755,6 @@ class StringAlter {
 		return this;
 	}
 
-
-	/**
-	 *
-	 * @param pos
-	 * @param {Array=} offsets
-	 * @returns {*}
-	 */
-	updatePosition(pos, offsets = this._offsets) {
-		if( !offsets.length ) {
-			return pos;
-		}
-		return this.updateRecord({from: pos, to: pos}, offsets, true, true).from;
-	}
-
-	updateRecord({from, to}, offsets = this._offsets, offsetValuesDelimiter = this._source.length, considerExtends = false) {//TODO:: optimize function speed
-		if( offsets && offsets.length ) {
-			let positionOffset = 0;
-			let originalFrom = from + positionOffset, originalTo = to + positionOffset;
-
-			for( let offset in offsets ) if( offsets.hasOwnProperty(offset) ) {
-				// Fast enumeration through sparse array MAY CAUSE PROBLEM WITH WRONG ORDER OF ARRAY ITEM, but it is unlikely
-				offset = offset | 0;
-
-				let offsetValue = offsets[offset];
-				let extendValue = 0;
-				let addingValue = 0;
-
-				if( typeof offsetValue === "string" ) {
-					offsetValue += "";
-					let index = offsetValue.indexOf("|");
-					if( index !== -1 ) {//adding
-						addingValue = offsetValue.substr(index + 1) | 0;
-						extendValue = offsetValue.substr(0, index) | 0;
-					}
-					else {
-						extendValue = offsetValue | 0;
-					}
-				}
-				else {
-					extendValue = offsetValue | 0;
-				}
-
-				if( offset <= originalTo ) {// must be <=
-					if( offset <= originalFrom) {// must be <=
-						if( considerExtends || offset !== originalFrom ) {
-							from += extendValue;
-						}
-						if( addingValue ) {
-							from += addingValue;
-						}
-					}
-
-					to += extendValue;
-					if( offset !== originalTo && addingValue ) {
-						to += addingValue;
-					}
-
-				}
-				else {
-					break;
-				}
-			}
-		}
-
-		return new Record(from, to);
-	}
-
 	groupedFragments(fragments = this._fragments) {
 		let lastStart, lastEnd, groupFrag, groupFragIndex;
 		
@@ -831,7 +912,7 @@ class StringAlter {
 
 		let outsStr = "", outs = [];
 
-		let pos = this.updatePosition(0, offsets)
+		let pos = offsets.getPosition(0)
 			, clearPos = 0
 			//, posOffset = 0
 		;
@@ -841,7 +922,7 @@ class StringAlter {
 			outsStr = sourceString.slice(0, pos);
 		}
 
-		let currentOffsets = offsets.slice();
+		let currentOffsets = offsets.clone();
 		let postFragments = [];
 
 		for (let index = 0; index < fragmentsLength; index++) {
@@ -857,7 +938,7 @@ class StringAlter {
 
 			let expressionsLength = frag.extractData(this._records);
 
-			let {from, to} = this.updateRecord(frag.record, currentOffsets);
+			let {from, to} = currentOffsets.getRecord(frag.record);
 			if( frag.type === Fragment.Types.insert ) {
 				to = from;
 			}
@@ -893,13 +974,15 @@ class StringAlter {
 				sourceString = subAlter.apply();
 				subAlter.reset();
 
-				let offsetPos = this.updatePosition(clearPos, offsets);
+				let offsetPos = offsets.getPosition(clearPos);
 
 				pos = offsetPos;
 
-				offsets = this._offsets;
-				currentOffsets = this._offsets.slice();
-				({from, to}) = this.updateRecord(frag.record, offsets);
+				offsets = this._offsets;// TODO:: try to remove this
+
+				currentOffsets = offsets.clone();
+
+				({from, to}) = offsets.getRecord(frag.record);
 				outs = [];
 			}
 
@@ -923,7 +1006,7 @@ class StringAlter {
 						let sourceString = record._source.substring(record.from, record.to);//this._source.substring(record.from, record.to);
 						let subFragments = record.getSubs();
 						if( subFragments ) {
-							let alter = new StringAlter(sourceString, subFragments, [-record.from]);
+							let alter = new StringAlter(sourceString, subFragments, new RangeOffset([-record.from]));
 							sourceString = alter.apply(true);
 							alter.reset();
 						}
@@ -943,7 +1026,7 @@ class StringAlter {
 					}
 				
 					let record = frag.expressions[index];
-					record = this.updateRecord(record, currentOffsets);
+					record = currentOffsets.getRecord(record);
 					string += sourceString.substring(record.from, record.to);
 				}
 				string += data[expressionsLength];
@@ -960,44 +1043,13 @@ class StringAlter {
 			}
 
 			let offset = string.length - ( to - from );
-			if( offset ) {
-				let newIsAdding = to === from && !fragOptions.extend
-					, newIndex = frag.record.from + ( offset < 0 ? -offset - 1 : 0)// needs to inc index for negative offset
-					, offsetValue = offsets[newIndex] || 0
-					, addingValue = 0
-					, extendValue = 0
-				;
+			let newIsAdding = to === from && !fragOptions.extend;
 
-				if( typeof offsetValue === "string" ) {
-					offsetValue += "";
-					let index = offsetValue.indexOf("|");
-					if( index !== -1 ) {//adding
-						addingValue = offsetValue.substr(index + 1) | 0;
-						extendValue = offsetValue.substr(0, index) | 0;
-					}
-					else {
-						extendValue = offsetValue | 0;
-					}
-				}
-				else {
-					extendValue = offsetValue | 0;
-				}
-
-				if( newIsAdding ) {
-					addingValue += offset;
-				}
-				else {
-					extendValue += offset;
-				}
-
-				if( addingValue ) {
-					extendValue = (extendValue + "|" + addingValue);
-				}
-				else {
-					extendValue = extendValue;
-				}
-
-				offsets[newIndex] = extendValue;
+			if( newIsAdding ) {
+				offsets.addInsert(frag.record.from, offset);
+			}
+			else {
+				offsets.addRange(frag.record.from, frag.record.to, offset);
 			}
 
 			if( pos !== from ) {

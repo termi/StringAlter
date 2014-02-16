@@ -380,14 +380,14 @@ describe('StringAlter', function() {
 					var string = "(1 + 3) + X = 6";
 					var alter = new StringAlter(string);
 					alter
-						.replace(0, 7, "4")
-						.remove(7, 10)
+						.replace(0, 7, "4")// "(1 + 3)" -> "4"
+						.remove(7, 10)// " + " from "(1 + 3) + X"
 						.insertBefore(15, " - ")
 						.insert(15, alter.get(0, 7), {__newTransitionalSubLogic: true})
 					;
 
-					alter.apply();
-					alter.remove(0, 7);
+					alter.apply();// == "4X = 6 - 4"
+					alter.remove(0, 7);// "X" from ""4X = 6 - 4""
 					
 					var result = alter.apply();
 					expect(result).toEqual("X = 6 - 4");
