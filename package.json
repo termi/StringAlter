@@ -1,6 +1,6 @@
 {
   "name": "string-alter",
-  "version": "0.6.3",
+  "version": "0.6.8",
   "description": "String alter",
   "main": "./build/es5/StringAlter.js",
   "bin": "./build/es5/StringAlter.js",
