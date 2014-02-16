@@ -1,6 +1,217 @@
-function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;var i,r;if(typeof v==='object'&&typeof v['@@iterator']==='function'){i=v['@@iterator'](),r=[];while((f=i['next']()),f['done']!==true)r.push(f['value']);return r;}}throw new Error(v+' is not iterable')};"use strict";
+var SLICE$0 = Array.prototype.slice;function ITER$0(v,f){if(v){if(Array.isArray(v))return f?v.slice():v;var i,r;if(typeof v==='object'&&typeof v['@@iterator']==='function'){i=v['@@iterator'](),r=[];while((f=i['next']()),f['done']!==true)r.push(f['value']);return r;}}throw new Error(v+' is not iterable')};function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v==='object'&&typeof v['@@iterator']==='function')return v['@@iterator']();}throw new Error(v+' is not iterable')};"use strict";
 
 var assert = this["assert"] || (function(expect, msg)  { if(expect != true)throw new Error(msg || "") });
+
+var RangeIndex = (function(){
+	function RangeIndex() {
+		this.reset();
+	}
+
+	RangeIndex.prototype.reset = function() {
+		this.indexFrom = [];
+		//TODO::this.indexTo = [];
+	}
+
+	RangeIndex.prototype.add = function(from, to, data) {var $D$11;var $D$12;var $D$13;
+		var index = this.indexFrom
+			, indexeKeys = (("" + from) + "").split("")
+			, length = indexeKeys.length// key deep
+			, maxLimitProp = (("__maxTo" + length) + "")
+			, minLimitProp = (("__minFrom" + length) + "")
+		;
+
+		if( !(index[maxLimitProp] >= to) ) {
+			index[maxLimitProp] = to;
+		}
+		if( !(index[minLimitProp] <= from) ) {
+			index[minLimitProp] = from;
+		}
+
+		$D$11 = GET_ITER$0(indexeKeys);$D$12 = $D$11 === 0;$D$13 = ($D$12 ? indexeKeys.length : void 0);for( var indexKey ; $D$12 ? ($D$11 < $D$13) : !($D$13 = $D$11["next"]())["done"]; ){indexKey = ($D$12 ? indexeKeys[$D$11++] : $D$13["value"]);
+			indexKey = indexKey | 0;
+
+			index = index[indexKey] || (index[indexKey] = []);
+
+			if( !(index[maxLimitProp] >= to) ) {
+				index[maxLimitProp] = to;
+			}
+			if( !(index[minLimitProp] <= from) ) {
+				index[minLimitProp] = from;
+			}
+		};$D$11 = $D$12 = $D$13 = void 0;
+		(index.__data || (index.__data = [])).push({from: from, to: to, data: data});
+	}
+
+	RangeIndex.prototype.find = function(from) {var $D$14;var $D$15;var $D$16;var to = arguments[1];if(to === void 0)to = from;var options = arguments[2];if(options === void 0)options = {};
+//		if( from > to ) throw new Error("'from' value must be <= 'to' value");
+		var index = this.indexFrom
+			, result = []
+			, onfind = options.onfind
+		;
+
+		var pendingFromValue
+			, pendingToValue
+		;
+
+		var fromKey = (("" + from) + "")
+			, fromKeys = (function(){var $D$3;var $D$4;var $D$5;var $D$6;var $result$0 = [], v;$D$6 = (fromKey.split(""));$D$3 = GET_ITER$0($D$6);$D$4 = $D$3 === 0;$D$5 = ($D$4 ? $D$6.length : void 0);for(; $D$4 ? ($D$3 < $D$5) : !($D$5 = $D$3["next"]())["done"]; ){v = ($D$4 ? $D$6[$D$3++] : $D$5["value"]);{$result$0.push(v | 0)}};;return $result$0})()
+			, fromDeep = fromKeys.length
+			, maxLimitProp = (("__maxTo" + fromDeep) + "");
+
+		var toKey = (("" + to) + "")
+			, toKeys = toKey.split("")
+			, toDeep = toKeys.length
+		;
+
+//		if( fromDeep > 9 || toDeep > 9 ) throw new Error("'from' or 'to' value > 999999999 unsuported");//for 999999999 index file size must be ~1Gib
+		if( fromDeep < toDeep ) {
+			pendingToValue = to;
+
+			to = fromKey.replace(/\d/g, "9") | 0;
+
+			pendingFromValue = to + 1;
+		}
+
+		var subIndex
+			, lastFromNumberIndex = fromDeep - 1
+			, lastKey = fromKeys[lastFromNumberIndex]
+		;
+
+		while( from <= to ) {
+			if( !subIndex ) {
+				subIndex = index;
+				for( var fromKeyIndex = 0, fromKey$0 ; fromKeyIndex < fromDeep - 1 ; fromKeyIndex++ ) {
+					fromKey$0 = fromKeys[fromKeyIndex] | 0;
+					subIndex = subIndex[fromKey$0];
+					if( subIndex ) {
+						if( subIndex[maxLimitProp] < from ) {
+							//fast check: fragments in this index has changes outside current recort
+							subIndex = void 0;
+						}
+					}
+					if( !subIndex ) {
+						break;
+					}
+				}
+			}
+
+			if( subIndex ) {
+				var subIndexContainer = subIndex[lastKey];
+
+				if( subIndexContainer && subIndexContainer[maxLimitProp] >= from ) {
+					subIndexContainer = subIndexContainer.__data;
+					if( subIndexContainer ) {
+						$D$14 = GET_ITER$0(subIndexContainer);$D$15 = $D$14 === 0;$D$16 = ($D$15 ? subIndexContainer.length : void 0);for( var record ; $D$15 ? ($D$14 < $D$16) : !($D$16 = $D$14["next"]())["done"]; ){record = ($D$15 ? subIndexContainer[$D$14++] : $D$16["value"]);
+							var foundTo = record.to;
+
+							if( foundTo <= to && (!onfind || onfind(record.data, record.from, record.to) !== false) ) {
+								result.push(record.data);
+							}
+						};$D$14 = $D$15 = $D$16 = void 0;
+					}
+				}
+			}
+
+			from++;
+			lastKey = fromKeys[lastFromNumberIndex] = lastKey + 1;
+			if( lastKey > 9 ) {
+				fromKey = (("" + from) + "");
+				fromKeys = fromKey.split("").map( function(v)  {return v | 0} );
+				lastKey = 0;
+				subIndex = void 0;
+			}
+		}
+
+		if( pendingFromValue ) {
+			result.push.apply(result, ITER$0(this.find(pendingFromValue, pendingToValue, options)));
+		}
+
+		return result;
+	}
+
+	RangeIndex.prototype.findOuter = function(innerFrom) {var innerTo = arguments[1];if(innerTo === void 0)innerTo = innerFrom;var options = arguments[2];if(options === void 0)options = {};
+		var index = this.indexFrom
+			, result = []
+			, onfind = options.onfind
+		;
+
+		var intValue = innerFrom
+			, fromKey = (("" + intValue) + "")
+			, fromKeys = (function(){var $D$7;var $D$8;var $D$9;var $D$10;var $result$1 = [], v;$D$10 = (fromKey.split(""));$D$7 = GET_ITER$0($D$10);$D$8 = $D$7 === 0;$D$9 = ($D$8 ? $D$10.length : void 0);for(; $D$8 ? ($D$7 < $D$9) : !($D$9 = $D$7["next"]())["done"]; ){v = ($D$8 ? $D$10[$D$7++] : $D$9["value"]);{$result$1.push(v | 0)}};;return $result$1})()
+			, fromDeep = fromKeys.length
+			, maxLimitProp = (("__maxTo" + fromDeep) + "")
+			, minLimitName = (("__minFrom" + fromDeep) + "")
+		;
+
+		var subIndex = index
+			, stashedIndexes = []
+			, currentDeep = 1
+			, currentDeepDiff = fromDeep - currentDeep
+		;
+
+		var checkRecords = function()  {var $D$17;var $D$18;var $D$19;var records = arguments[0];if(records === void 0)records = [];
+			$D$17 = GET_ITER$0(records);$D$18 = $D$17 === 0;$D$19 = ($D$18 ? records.length : void 0);for( var record ; $D$18 ? ($D$17 < $D$19) : !($D$19 = $D$17["next"]())["done"]; ){record = ($D$18 ? records[$D$17++] : $D$19["value"]);
+				var from = record.from, to = record.to;
+				if( from <= innerFrom && to >= innerTo ) {
+					result.push(record.data);
+				}
+			};$D$17 = $D$18 = $D$19 = void 0;
+		}
+
+		while( intValue > 0 ) {
+			var keyValue = fromKeys[currentDeep - 1];
+			var indexValue;
+
+			var decrementKeys = true;
+
+			if( indexValue = subIndex[keyValue] ) {
+				if( indexValue[minLimitName] <= innerFrom && indexValue[maxLimitProp] >= innerTo ) {
+					if( currentDeep === fromDeep ) {
+						checkRecords(indexValue.__data);
+					}
+					else {
+						currentDeep++;
+						currentDeepDiff = fromDeep - currentDeep;
+						stashedIndexes.push(subIndex);
+						subIndex = indexValue;
+
+						decrementKeys = false;
+					}
+				}
+			}
+
+			if( decrementKeys ) {
+				var updateKeys = true;
+
+				if( currentDeepDiff ) {
+					intValue = intValue - (1 + (fromKeys.slice(currentDeep).join("") | 0));
+				}
+				else {//max deep
+					intValue--;
+					updateKeys = (fromKeys[currentDeep - 1] = fromKeys[currentDeep - 1] - 1) < 0;
+				}
+
+				if( updateKeys ) {
+					fromKeys = (("" + intValue) + "").split("").map( function(v)  {return v | 0} );
+
+					if( fromDeep !== fromKeys.length ) {
+						fromDeep = fromKeys.length;
+						maxLimitProp = (("__maxTo" + fromDeep) + "");
+						minLimitName = (("__minFrom" + fromDeep) + "");
+					}
+
+					if( currentDeep > 1 ) {
+						subIndex = stashedIndexes.pop();
+						currentDeep--;
+						currentDeepDiff = fromDeep - currentDeep;
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+;return RangeIndex;})();
 
 var Record = (function(){
 	function Record(from, to) {
@@ -12,24 +223,17 @@ var Record = (function(){
 		return Record.uniqueStart + "[" + this.from + "]" + Record.uniqueSeparator + "[" + this.to + "]" + Record.uniqueEnd;
 	}
 
-	Record.prototype.sub = function(fragment) {var $D$0;
-		if( fragment ) {
+	Record.prototype.addSubs = function() {var $D$0;var fragments = SLICE$0.call(arguments, 0);
+		if( fragments.length ) {
 			if( !this.subs ) {
 				this.subs = [];
 			}
+			($D$0 = this.subs).push.apply($D$0, ITER$0(fragments));
+		;$D$0 = void 0}
+	}
 
-			if( Array.isArray(fragment) ) {
-				($D$0 = this.subs).push.apply($D$0, ITER$0(fragment));
-			;$D$0 = void 0}
-			else if( fragment instanceof Fragment ) {
-				this.subs.push(fragment);
-			}
-
-			return null;
-		}
-		else {
-			return this.subs;
-		}
+	Record.prototype.getSubs = function(fragment) {
+		return this.subs;
 	}
 ;return Record;})();
 Record.uniqueStart = "[<" + ((Math.random() * 1e8) | 0);//should matches /\[\<\d{8}/
@@ -45,19 +249,18 @@ var Fragment = (function(){
 		this.data = insertStr;
 		this.expressions = void 0;
 	}
-
-	Fragment.prototype.sub = function(fragment) {
-		if( fragment instanceof Fragment ) {
+	
+	Fragment.prototype.addSubs = function() {var $D$1;var fragments = SLICE$0.call(arguments, 0);
+		if( fragments.length ) {
 			if( !this.subs ) {
 				this.subs = [];
 			}
-			this.subs.unshift(fragment);
+			($D$1 = this.subs).unshift.apply($D$1, ITER$0(fragments));
+		;$D$1 = void 0}
+	}	
 
-			return null;
-		}
-		else {
-			return this.subs;
-		}
+	Fragment.prototype.getSubs = function() {
+		return this.subs;
 	}
 
 	Fragment.prototype.extractData = function(recordsCache) {var this$0 = this;
@@ -144,7 +347,7 @@ var Fragment = (function(){
 ;return Fragment;})();
 Fragment.Types = {replace: 1, insert: 2, remove: 3 };
 
-var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))return 0;if(typeof v==='object'&&typeof v['@@iterator']==='function')return v['@@iterator']();}throw new Error(v+' is not iterable')};
+var StringAlter = (function(){
 	function StringAlter(source) {var fragments = arguments[1];if(fragments === void 0)fragments = [];var offsets = arguments[2];if(offsets === void 0)offsets = [];var recordsCache = arguments[3];if(recordsCache === void 0)recordsCache = {};
 		this.reset(
 			new String(source)//TODO:: [new get logic] after new get logic completed replace it to this._source = source
@@ -155,27 +358,43 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 	}
 
 	StringAlter.prototype.reset = function() {var source = arguments[0];if(source === void 0)source = '';var fragments = arguments[1];if(fragments === void 0)fragments = [];var offsets = arguments[2];if(offsets === void 0)offsets = [];var recordsCache = arguments[3];if(recordsCache === void 0)recordsCache = {};var fragmentStatesArray = arguments[4];if(fragmentStatesArray === void 0)fragmentStatesArray = [];
+		if( this._fragments == fragments ) {
+			// no needs to reindex
+		}
+		else {
+			this._fragments = fragments;
+			this._fragmentsIndex = new RangeIndex();
+
+			if( fragments.length ) {
+				// TODO:: this._fragmentsIndex.reset(); this._fragmentsIndex.rebuild(fragments);
+			}
+		}
+
+		if( this._records == recordsCache ) {
+			// no needs to reindex
+		}
+		else {
+			this._records = recordsCache;
+			this._getRecorsIndex = new RangeIndex();
+
+			// TODO::
+//			for( var isNotEmpty in records ) if( records.hasOwnProperty(isNotEmpty) ) {
+//				this._fragmentsIndex.reset();
+//				this._fragmentsIndex.rebuild(records);
+//				break;
+//			}
+		}
+
 		this._source = source;
-		this._fragments = fragments;
 		this._offsets = offsets;
 		this._fragmentStates = {};
 		this._fragmentStatesArray = fragmentStatesArray;
 		this.__prevStateName = this.__currentStateName = void 0;//"$" + Math.random() * 1e9 | 0 + "$";
 		this._fragmentsGroupId = 0;
 		this._removedBlocks = {};
-
-		this._index = {
-			indexFrom: []
-//			, indexTo: []
-//			, rangeFrom_count: []
-//			, rangeTo_count: []
-
-			, recordIndexFrom: []
-		};
-		this._records = recordsCache;
 	}
 
-	StringAlter.prototype._createFragment = function(from, to, data, type, options) {var $D$2;var $D$3;var $D$4;var $D$5;
+	StringAlter.prototype._createFragment = function(from, to, data, type, options) {var $D$20;var $D$21;var $D$22;var $D$23;
 		if( typeof data === "object" ) {
 			assert(data instanceof Record);
 		}
@@ -197,250 +416,13 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 
 		fragment.__createdIndex = this._fragments.length;
 		this._fragments.push(fragment);
-		this._addRecordToIndex(fragment.record, from, to, fragment, this._index.indexFrom);
+		this._fragmentsIndex.add(from, to, fragment);
 
 //		if( options && options.__newTransitionalSubLogic ) {// Transitional period
-			$D$5 = (this._findFragmentRecords(from, to));$D$2 = GET_ITER$0($D$5);$D$3 = $D$2 === 0;$D$4 = ($D$3 ? $D$5.length : void 0);for( var record ; $D$3 ? ($D$2 < $D$4) : !($D$4 = $D$2["next"]())["done"]; ){record = ($D$3 ? $D$5[$D$2++] : $D$4["value"]);
-				record.sub(fragment);
-			};$D$2 = $D$3 = $D$4 = $D$5 = void 0;
+			$D$23 = (this._getRecorsIndex.findOuter(from, to));$D$20 = GET_ITER$0($D$23);$D$21 = $D$20 === 0;$D$22 = ($D$21 ? $D$23.length : void 0);for( var record ; $D$21 ? ($D$20 < $D$22) : !($D$22 = $D$20["next"]())["done"]; ){record = ($D$21 ? $D$23[$D$20++] : $D$22["value"]);
+				record.addSubs(fragment);
+			};$D$20 = $D$21 = $D$22 = $D$23 = void 0;
 //		}
-	}
-
-	StringAlter.prototype._addRecordToIndex = function(record) {var $D$6;var $D$7;var $D$8;var from = arguments[1];if(from === void 0)from = record.from;var to = arguments[2];if(to === void 0)to = record.to;var data = arguments[3];if(data === void 0)data = record;var index = arguments[4];if(index === void 0)index = this._index.recordIndexFrom;
-		var key = from + "";
-		var indexes = key.split("");
-		var deep = indexes.length;
-		var maxLimitName = "__maxTo" + deep;
-		var minLimitName = "__minFrom" + deep;
-		var currentIndexContainer = index;
-
-		if( currentIndexContainer[maxLimitName] === void 0 || currentIndexContainer[maxLimitName] < to ) {
-			currentIndexContainer[maxLimitName] = to;
-		}
-		if( currentIndexContainer[minLimitName] === void 0 || currentIndexContainer[minLimitName] > from ) {
-			currentIndexContainer[minLimitName] = from;
-		}
-		$D$6 = GET_ITER$0(indexes);$D$7 = $D$6 === 0;$D$8 = ($D$7 ? indexes.length : void 0);for( var indexValue ; $D$7 ? ($D$6 < $D$8) : !($D$8 = $D$6["next"]())["done"]; ){indexValue = ($D$7 ? indexes[$D$6++] : $D$8["value"]);
-			indexValue = indexValue | 0;
-			if( !currentIndexContainer[indexValue] ) {
-				currentIndexContainer = currentIndexContainer[indexValue] = [];
-			}
-			else {
-				currentIndexContainer = currentIndexContainer[indexValue];
-			}
-			if( currentIndexContainer[maxLimitName] === void 0 || currentIndexContainer[maxLimitName] < to ) {
-				currentIndexContainer[maxLimitName] = to;
-			}
-			if( currentIndexContainer[minLimitName] === void 0 || currentIndexContainer[minLimitName] > from ) {
-				currentIndexContainer[minLimitName] = from;
-			}
-		};$D$6 = $D$7 = $D$8 = void 0;
-		if( !currentIndexContainer.__value ) {
-			currentIndexContainer.__value = [];
-		}
-		currentIndexContainer.__value.push(data);
-
-//		key = to + "";
-//		indexes = key.split("");
-//		deep = indexes.length;
-//		limitName = "__minFrom" + deep;
-//		currentIndexContainer = this._index.indexTo;
-//		if( currentIndexContainer[limitName] === void 0 || currentIndexContainer[limitName] > from ) {
-//			currentIndexContainer[limitName] = from;
-//		}
-//		for( ii = 0, len = indexes.length ; ii < len ; ii++ ) {
-//			let indexValue = indexes[ii] | 0;
-//			if( !currentIndexContainer[indexValue] ) {
-//				currentIndexContainer = currentIndexContainer[indexValue] = [];
-//			}
-//			else {
-//				currentIndexContainer = currentIndexContainer[indexValue];
-//			}
-//			if( currentIndexContainer[limitName] === void 0 || currentIndexContainer[limitName] > from ) {
-//				currentIndexContainer[limitName] = from;
-//			}
-//		}
-//		if( !currentIndexContainer.__value ) {
-//			currentIndexContainer.__value = [];
-//		}
-//		currentIndexContainer.__value.push(fragment);
-	}
-
-	StringAlter.prototype._findRecordFragments = function(from, to) {var $D$9;var $D$10;var $D$11;var doNotSort = arguments[2];if(doNotSort === void 0)doNotSort = false;
-		var result = [];
-
-		var fromPendingValue, toPendingValue;
-
-		var toNumbers_fn = function(v)  {return v | 0};
-
-		var fromKey = from + "";
-		var fromKeys = fromKey.split("").map(toNumbers_fn);
-		var fromDeep = fromKeys.length;
-		var maxLimitName = "__maxTo" + fromDeep;
-
-		var toKey = to + "";
-		var toKeys = toKey.split("");
-		var toDeep = toKeys.length;
-
-//		if( fromDeep > toDeep ) {
-//			throw new Error("'from' value must be <= 'to' value");
-//		}
-//		if( fromDeep > 9 || toDeep > 9 ) {
-//			throw new Error("'from' or 'to' value > 999999999 unsuported");//for 999999999 index file size must be ~1Gib
-//		}
-		if( fromDeep < toDeep ) {
-			toPendingValue = to;
-
-			to = fromKey.replace(/\d/g, "9") | 0;
-
-			fromPendingValue = to + 1;
-		}
-
-		var currentIndex, lastFromNumberIndex = fromDeep - 1;
-		var index = this._index.indexFrom;
-		var lastKey = fromKeys[lastFromNumberIndex];
-
-		while( from <= to ) {
-			if( !currentIndex ) {
-				currentIndex = index;
-				for( var jj = 0, jjKey ; jj < fromDeep - 1 ; jj++ ) {
-					jjKey = fromKeys[jj] | 0;
-					currentIndex = currentIndex[jjKey];
-					if( currentIndex ) {
-						if( currentIndex[maxLimitName] < from ) {
-							//fast check: fragments in this index has changes outside current recort
-							currentIndex = void 0;
-						}
-					}
-					if( !currentIndex ) {
-						break;
-					}
-				}
-			}
-
-			if( currentIndex ) {
-				var currentIndexContainer = currentIndex[lastKey];
-
-				if( currentIndexContainer && currentIndexContainer[maxLimitName] >= from ) {
-					currentIndexContainer = currentIndexContainer.__value;
-					if( currentIndexContainer ) {
-						$D$9 = GET_ITER$0(currentIndexContainer);$D$10 = $D$9 === 0;$D$11 = ($D$10 ? currentIndexContainer.length : void 0);for( var frag ; $D$10 ? ($D$9 < $D$11) : !($D$11 = $D$9["next"]())["done"]; ){frag = ($D$10 ? currentIndexContainer[$D$9++] : $D$11["value"]);
-							var fragTo = (frag.record).to;
-
-							if( fragTo <= to ) {
-								result.push(frag);
-							}
-						};$D$9 = $D$10 = $D$11 = void 0;
-					}
-				}
-			}
-
-			from++;
-			lastKey = fromKeys[lastFromNumberIndex] = lastKey + 1;
-			if( lastKey > 9 ) {
-				fromKey = from + "";
-				fromKeys = fromKey.split("").map(toNumbers_fn);
-				lastKey = 0;
-				currentIndex = void 0;
-			}
-		}
-
-		if( fromPendingValue ) {
-			result.push.apply(result, ITER$0(this._findRecordFragments(fromPendingValue, toPendingValue, true)));
-		}
-
-		return doNotSort
-			? result
-			: result.sort( function(a, b)  {var a = a.__createdIndex;var b = b.__createdIndex;return a - b}  )
-		;
-	}
-
-	StringAlter.prototype._findFragmentRecords = function(fragmentFrom, fragmentTo) {
-		var result = [];
-
-		var toNumbers_fn = function(v)  {return v | 0};
-
-		var intValue = fragmentFrom;
-
-		var fromKey = intValue + "";
-		var fromKeys = fromKey.split("").map(toNumbers_fn);
-		var fromDeep = fromKeys.length;
-		var maxLimitName = "__maxTo" + fromDeep;
-		var minLimitName = "__minFrom" + fromDeep;
-
-		var index = this._index.recordIndexFrom;
-
-		var currentIndex = index
-			, stashedIndexes = []
-			, currentDeep = 1
-			, currentDeepDiff = fromDeep - currentDeep
-		;
-
-		function checkRecords(records) {var $D$12;var $D$13;var $D$14;
-			if( !records ) {
-				return;
-			}
-
-			$D$12 = GET_ITER$0(records);$D$13 = $D$12 === 0;$D$14 = ($D$13 ? records.length : void 0);for( var record ; $D$13 ? ($D$12 < $D$14) : !($D$14 = $D$12["next"]())["done"]; ){record = ($D$13 ? records[$D$12++] : $D$14["value"]);
-				var from = record.from, to = record.to;
-				if( from <= fragmentFrom && to >= fragmentTo ) {
-					result.push(record);
-				}
-			};$D$12 = $D$13 = $D$14 = void 0;
-		}
-
-		while( intValue > 0 ) {
-			var keyValue = fromKeys[currentDeep - 1];
-			var indexValue;
-
-			var decrementKeys = true;
-
-			if( indexValue = currentIndex[keyValue] ) {
-				if( indexValue[minLimitName] <= fragmentFrom && indexValue[maxLimitName] >= fragmentTo ) {
-					if( currentDeep === fromDeep ) {
-						checkRecords(indexValue.__value);
-					}
-					else {
-						currentDeep++;
-						currentDeepDiff = fromDeep - currentDeep;
-						stashedIndexes.push(currentIndex);
-						currentIndex = indexValue;
-
-						decrementKeys = false;
-					}
-				}
-			}
-
-			if( decrementKeys ) {
-				var updateKeys = true;
-
-				if( currentDeepDiff ) {
-					intValue = intValue - (1 + (fromKeys.slice(currentDeep).join("") | 0));
-				}
-				else {//max deep
-					intValue--;
-					updateKeys = (fromKeys[currentDeep - 1] = fromKeys[currentDeep - 1] - 1) < 0;
-				}
-
-				if( updateKeys ) {
-					fromKeys = (intValue + "").split("").map(toNumbers_fn);
-
-					if( fromDeep !== fromKeys.length ) {
-						fromDeep = fromKeys.length;
-						maxLimitName = "__maxTo" + fromDeep;
-						minLimitName = "__minFrom" + fromDeep;
-					}
-
-					if( currentDeep > 1 ) {
-						currentIndex = stashedIndexes.pop();
-						currentDeep--;
-						currentDeepDiff = fromDeep - currentDeep;
-					}
-				}
-			}
-		}
-
-		return result;
 	}
 
 	StringAlter.prototype.hasChanges = function() {
@@ -463,13 +445,13 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 
 		var record = this._records[recordKey] = new Record(from, to);
 
-		this._addRecordToIndex(record, from, to);
+		this._getRecorsIndex.add(from, to, record);
 
-		var recordFragments = this._findRecordFragments(from, to);
+		var recordFragments = this._fragmentsIndex.find(from, to).sort( function(a, b)  {var a = a.__createdIndex;var b = b.__createdIndex;return a - b}  );
 
-		if( recordFragments && recordFragments.length ) {
+		if( recordFragments ) {
 			// [new get logic]
-			record.sub(recordFragments);
+			record.addSubs.apply(record, ITER$0(recordFragments));
 		}
 		record._source = this._source;//TODO:: [new get logic] after new get logic completed remove this line
 
@@ -533,7 +515,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 	 */
 	StringAlter.prototype.remove = function(from, to, options) {
 		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-		
+
 		if( this._removedBlocks[from + "|" + to] !== void 0 ) {
 			// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
 			assert(false, 'This string block has already been removed');
@@ -591,7 +573,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 	 */
 	StringAlter.prototype.wrap = function(from, to, start, end) {var options = arguments[4];if(options === void 0)options = {};
 		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-		
+
 		options.group = ++this._fragmentsGroupId;
 
 		var firstInsertOptions = Object.create(options);
@@ -708,14 +690,14 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 					|| (groupFragExtend && currFragExtend && (from >= lastStart && to <= lastEnd))
 				)
 			) {
-				groupFrag.sub(frag);
+				groupFrag.addSubs(frag);
 				fragments.splice(fragmentsLength, 1);
 			}
 			else if( lastEnd &&	(
 					from < lastStart && to > lastEnd
 					|| (groupFragExtend && currFragExtend && (from <= lastStart && to >= lastEnd)) )
 			) {
-				frag.sub(groupFrag);
+				frag.addSubs(groupFrag);
 				fragments.splice(groupFragIndex, 1);
 				groupFrag = frag;
 				lastStart = from;
@@ -731,7 +713,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 		return fragments;
 	}
 
-	StringAlter.prototype.apply = function() {var $D$1;var forcePreparation = arguments[0];if(forcePreparation === void 0)forcePreparation = false;
+	StringAlter.prototype.apply = function() {var $D$2;var forcePreparation = arguments[0];if(forcePreparation === void 0)forcePreparation = false;
 		var offsets = this._offsets;
 		var fragments = this._fragments;
 		var sourceString = this._source;
@@ -898,7 +880,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 				}
 			}
 
-			var subFragments = frag$0.sub();
+			var subFragments = frag$0.getSubs();
 			if( subFragments ) {
 				outsStr += outs.join("");
 
@@ -917,9 +899,9 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 
 				offsets = this._offsets;
 				currentOffsets = this._offsets.slice();
-				from = ($D$1 = this.updateRecord(frag$0.record, offsets)).from, to = $D$1.to, $D$1;
+				from = ($D$2 = this.updateRecord(frag$0.record, offsets)).from, to = $D$2.to, $D$2;
 				outs = [];
-			;$D$1 = void 0}
+			;$D$2 = void 0}
 
 			var string = void 0;
 			if( fragOptions.__newTransitionalSubLogic && expressionsLength ) {// [new get logic]
@@ -939,7 +921,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 					}
 					else {
 						var sourceString$0 = record._source.substring(record.from, record.to);//this._source.substring(record.from, record.to);
-						var subFragments$0 = record.sub();
+						var subFragments$0 = record.getSubs();
 						if( subFragments$0 ) {
 							var alter = new StringAlter(sourceString$0, subFragments$0, [-record.from]);
 							sourceString$0 = alter.apply(true);
@@ -1050,9 +1032,9 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 		return this._source;
 	}
 
-	StringAlter.prototype.printFragments = function() {var $D$15;var $D$16;var $D$17;var fragments = arguments[0];if(fragments === void 0)fragments = this._fragments;
+	StringAlter.prototype.printFragments = function() {var $D$24;var $D$25;var $D$26;var fragments = arguments[0];if(fragments === void 0)fragments = this._fragments;
 		var result = [];
-		$D$15 = GET_ITER$0(fragments);$D$16 = $D$15 === 0;$D$17 = ($D$16 ? fragments.length : void 0);for( var frag ; $D$16 ? ($D$15 < $D$17) : !($D$17 = $D$15["next"]())["done"]; ){frag = ($D$16 ? fragments[$D$15++] : $D$17["value"]);
+		$D$24 = GET_ITER$0(fragments);$D$25 = $D$24 === 0;$D$26 = ($D$25 ? fragments.length : void 0);for( var frag ; $D$25 ? ($D$24 < $D$26) : !($D$26 = $D$24["next"]())["done"]; ){frag = ($D$25 ? fragments[$D$24++] : $D$26["value"]);
 			var type = frag.type, record = frag.record, remove = (insert = Fragment.Types).remove, insert = insert.insert
 
 			result.push(
@@ -1063,7 +1045,7 @@ var StringAlter = (function(){function GET_ITER$0(v){if(v){if(Array.isArray(v))r
 				+ (("opt: " + (JSON.stringify(frag.options))) + "")
 				+ (("" + (remove !== type ? "\\n  data: '" + frag.data + "'" : "")) + " | ")
 			);
-		};$D$15 = $D$16 = $D$17 = void 0;
+		};$D$24 = $D$25 = $D$26 = void 0;
 
 		return result;
 	}

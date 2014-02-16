@@ -476,7 +476,7 @@ describe('StringAlter', function() {
 							var id = options._test_id;
 
 							if( options._test_should_have_childer ) {
-								var subs = frag.sub();
+								var subs = frag.getSubs();
 								if( Array.isArray(subs) && subs.length ) {
 									return subs.every(function(subFrag) {
 										var options = (subFrag.options || {});

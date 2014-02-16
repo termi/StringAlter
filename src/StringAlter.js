@@ -2,6 +2,217 @@
 
 let assert = this["assert"] || ((expect, msg) => { if(expect != true)throw new Error(msg || "") });
 
+class RangeIndex {
+	constructor() {
+		this.reset();
+	}
+
+	reset() {
+		this.indexFrom = [];
+		//TODO::this.indexTo = [];
+	}
+
+	add(from, to, data) {
+		let index = this.indexFrom
+			, indexeKeys = `${from}`.split("")
+			, {length} = indexeKeys// key deep
+			, maxLimitProp = `__maxTo${length}`
+			, minLimitProp = `__minFrom${length}`
+		;
+
+		if( !(index[maxLimitProp] >= to) ) {
+			index[maxLimitProp] = to;
+		}
+		if( !(index[minLimitProp] <= from) ) {
+			index[minLimitProp] = from;
+		}
+
+		for( let indexKey of indexeKeys ) {
+			indexKey = indexKey | 0;
+
+			index = index[indexKey] || (index[indexKey] = []);
+
+			if( !(index[maxLimitProp] >= to) ) {
+				index[maxLimitProp] = to;
+			}
+			if( !(index[minLimitProp] <= from) ) {
+				index[minLimitProp] = from;
+			}
+		}
+		(index.__data || (index.__data = [])).push({from, to, data});
+	}
+
+	find(from, to = from, options = {}) {
+//		if( from > to ) throw new Error("'from' value must be <= 'to' value");
+		let index = this.indexFrom
+			, result = []
+			, {onfind} = options
+		;
+
+		let pendingFromValue
+			, pendingToValue
+		;
+
+		let fromKey = `${from}`
+			, fromKeys = [ for( v of fromKey.split("") ) v | 0 ]
+			, fromDeep = fromKeys.length
+			, maxLimitProp = `__maxTo${fromDeep}`;
+
+		let toKey = `${to}`
+			, toKeys = toKey.split("")
+			, toDeep = toKeys.length
+		;
+
+//		if( fromDeep > 9 || toDeep > 9 ) throw new Error("'from' or 'to' value > 999999999 unsuported");//for 999999999 index file size must be ~1Gib
+		if( fromDeep < toDeep ) {
+			pendingToValue = to;
+
+			to = fromKey.replace(/\d/g, "9") | 0;
+
+			pendingFromValue = to + 1;
+		}
+
+		let subIndex
+			, lastFromNumberIndex = fromDeep - 1
+			, lastKey = fromKeys[lastFromNumberIndex]
+		;
+
+		while( from <= to ) {
+			if( !subIndex ) {
+				subIndex = index;
+				for( let fromKeyIndex = 0, fromKey ; fromKeyIndex < fromDeep - 1 ; fromKeyIndex++ ) {
+					fromKey = fromKeys[fromKeyIndex] | 0;
+					subIndex = subIndex[fromKey];
+					if( subIndex ) {
+						if( subIndex[maxLimitProp] < from ) {
+							//fast check: fragments in this index has changes outside current recort
+							subIndex = void 0;
+						}
+					}
+					if( !subIndex ) {
+						break;
+					}
+				}
+			}
+
+			if( subIndex ) {
+				let subIndexContainer = subIndex[lastKey];
+
+				if( subIndexContainer && subIndexContainer[maxLimitProp] >= from ) {
+					subIndexContainer = subIndexContainer.__data;
+					if( subIndexContainer ) {
+						for( let record of subIndexContainer ) {
+							let {to: foundTo} = record;
+
+							if( foundTo <= to && (!onfind || onfind(record.data, record.from, record.to) !== false) ) {
+								result.push(record.data);
+							}
+						}
+					}
+				}
+			}
+
+			from++;
+			lastKey = fromKeys[lastFromNumberIndex] = lastKey + 1;
+			if( lastKey > 9 ) {
+				fromKey = `${from}`;
+				fromKeys = fromKey.split("").map( (v) => v | 0 );
+				lastKey = 0;
+				subIndex = void 0;
+			}
+		}
+
+		if( pendingFromValue ) {
+			result.push(...this.find(pendingFromValue, pendingToValue, options));
+		}
+
+		return result;
+	}
+
+	findOuter(innerFrom, innerTo = innerFrom, options = {}) {
+		let index = this.indexFrom
+			, result = []
+			, {onfind} = options
+		;
+
+		let intValue = innerFrom
+			, fromKey = `${intValue}`
+			, fromKeys = [ for( v of fromKey.split("") ) v | 0 ]
+			, fromDeep = fromKeys.length
+			, maxLimitProp = `__maxTo${fromDeep}`
+			, minLimitName = `__minFrom${fromDeep}`
+		;
+
+		let subIndex = index
+			, stashedIndexes = []
+			, currentDeep = 1
+			, currentDeepDiff = fromDeep - currentDeep
+		;
+
+		let checkRecords = (records = []) => {
+			for( let record of records ) {
+				let {from, to} = record;
+				if( from <= innerFrom && to >= innerTo ) {
+					result.push(record.data);
+				}
+			}
+		}
+
+		while( intValue > 0 ) {
+			let keyValue = fromKeys[currentDeep - 1];
+			let indexValue;
+
+			let decrementKeys = true;
+
+			if( indexValue = subIndex[keyValue] ) {
+				if( indexValue[minLimitName] <= innerFrom && indexValue[maxLimitProp] >= innerTo ) {
+					if( currentDeep === fromDeep ) {
+						checkRecords(indexValue.__data);
+					}
+					else {
+						currentDeep++;
+						currentDeepDiff = fromDeep - currentDeep;
+						stashedIndexes.push(subIndex);
+						subIndex = indexValue;
+
+						decrementKeys = false;
+					}
+				}
+			}
+
+			if( decrementKeys ) {
+				let updateKeys = true;
+
+				if( currentDeepDiff ) {
+					intValue = intValue - (1 + (fromKeys.slice(currentDeep).join("") | 0));
+				}
+				else {//max deep
+					intValue--;
+					updateKeys = (fromKeys[currentDeep - 1] = fromKeys[currentDeep - 1] - 1) < 0;
+				}
+
+				if( updateKeys ) {
+					fromKeys = `${intValue}`.split("").map( (v) => v | 0 );
+
+					if( fromDeep !== fromKeys.length ) {
+						fromDeep = fromKeys.length;
+						maxLimitProp = `__maxTo${fromDeep}`;
+						minLimitName = `__minFrom${fromDeep}`;
+					}
+
+					if( currentDeep > 1 ) {
+						subIndex = stashedIndexes.pop();
+						currentDeep--;
+						currentDeepDiff = fromDeep - currentDeep;
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+}
+
 class Record {
 	constructor(from, to) {
 		this.from = from;
@@ -12,24 +223,17 @@ class Record {
 		return Record.uniqueStart + "[" + this.from + "]" + Record.uniqueSeparator + "[" + this.to + "]" + Record.uniqueEnd;
 	}
 
-	sub(fragment) {
-		if( fragment ) {
+	addSubs(...fragments) {
+		if( fragments.length ) {
 			if( !this.subs ) {
 				this.subs = [];
 			}
-
-			if( Array.isArray(fragment) ) {
-				this.subs.push(...fragment);
-			}
-			else if( fragment instanceof Fragment ) {
-				this.subs.push(fragment);
-			}
-
-			return null;
+			this.subs.push(...fragments);
 		}
-		else {
-			return this.subs;
-		}
+	}
+
+	getSubs(fragment) {
+		return this.subs;
 	}
 }
 Record.uniqueStart = "[<" + ((Math.random() * 1e8) | 0);//should matches /\[\<\d{8}/
@@ -45,19 +249,18 @@ class Fragment {
 		this.data = insertStr;
 		this.expressions = void 0;
 	}
-
-	sub(fragment) {
-		if( fragment instanceof Fragment ) {
+	
+	addSubs(...fragments) {
+		if( fragments.length ) {
 			if( !this.subs ) {
 				this.subs = [];
 			}
-			this.subs.unshift(fragment);
+			this.subs.unshift(...fragments);
+		}
+	}	
 
-			return null;
-		}
-		else {
-			return this.subs;
-		}
+	getSubs() {
+		return this.subs;
 	}
 
 	extractData(recordsCache) {
@@ -155,24 +358,40 @@ class StringAlter {
 	}
 
 	reset(source = '', fragments = [], offsets = [], recordsCache = {}, fragmentStatesArray = []) {
+		if( this._fragments == fragments ) {
+			// no needs to reindex
+		}
+		else {
+			this._fragments = fragments;
+			this._fragmentsIndex = new RangeIndex();
+
+			if( fragments.length ) {
+				// TODO:: this._fragmentsIndex.reset(); this._fragmentsIndex.rebuild(fragments);
+			}
+		}
+
+		if( this._records == recordsCache ) {
+			// no needs to reindex
+		}
+		else {
+			this._records = recordsCache;
+			this._getRecorsIndex = new RangeIndex();
+
+			// TODO::
+//			for( var isNotEmpty in records ) if( records.hasOwnProperty(isNotEmpty) ) {
+//				this._fragmentsIndex.reset();
+//				this._fragmentsIndex.rebuild(records);
+//				break;
+//			}
+		}
+
 		this._source = source;
-		this._fragments = fragments;
 		this._offsets = offsets;
 		this._fragmentStates = {};
 		this._fragmentStatesArray = fragmentStatesArray;
 		this.__prevStateName = this.__currentStateName = void 0;//"$" + Math.random() * 1e9 | 0 + "$";
 		this._fragmentsGroupId = 0;
 		this._removedBlocks = {};
-
-		this._index = {
-			indexFrom: []
-//			, indexTo: []
-//			, rangeFrom_count: []
-//			, rangeTo_count: []
-
-			, recordIndexFrom: []
-		};
-		this._records = recordsCache;
 	}
 
 	_createFragment(from, to, data, type, options) {
@@ -197,250 +416,13 @@ class StringAlter {
 
 		fragment.__createdIndex = this._fragments.length;
 		this._fragments.push(fragment);
-		this._addRecordToIndex(fragment.record, from, to, fragment, this._index.indexFrom);
+		this._fragmentsIndex.add(from, to, fragment);
 
 //		if( options && options.__newTransitionalSubLogic ) {// Transitional period
-			for( let record of this._findFragmentRecords(from, to) ) {
-				record.sub(fragment);
+			for( let record of this._getRecorsIndex.findOuter(from, to) ) {
+				record.addSubs(fragment);
 			}
 //		}
-	}
-
-	_addRecordToIndex(record, from = record.from, to = record.to, data = record, index = this._index.recordIndexFrom) {
-		let key = from + "";
-		let indexes = key.split("");
-		let deep = indexes.length;
-		let maxLimitName = "__maxTo" + deep;
-		let minLimitName = "__minFrom" + deep;
-		let currentIndexContainer = index;
-
-		if( currentIndexContainer[maxLimitName] === void 0 || currentIndexContainer[maxLimitName] < to ) {
-			currentIndexContainer[maxLimitName] = to;
-		}
-		if( currentIndexContainer[minLimitName] === void 0 || currentIndexContainer[minLimitName] > from ) {
-			currentIndexContainer[minLimitName] = from;
-		}
-		for( let indexValue of indexes ) {
-			indexValue = indexValue | 0;
-			if( !currentIndexContainer[indexValue] ) {
-				currentIndexContainer = currentIndexContainer[indexValue] = [];
-			}
-			else {
-				currentIndexContainer = currentIndexContainer[indexValue];
-			}
-			if( currentIndexContainer[maxLimitName] === void 0 || currentIndexContainer[maxLimitName] < to ) {
-				currentIndexContainer[maxLimitName] = to;
-			}
-			if( currentIndexContainer[minLimitName] === void 0 || currentIndexContainer[minLimitName] > from ) {
-				currentIndexContainer[minLimitName] = from;
-			}
-		}
-		if( !currentIndexContainer.__value ) {
-			currentIndexContainer.__value = [];
-		}
-		currentIndexContainer.__value.push(data);
-
-//		key = to + "";
-//		indexes = key.split("");
-//		deep = indexes.length;
-//		limitName = "__minFrom" + deep;
-//		currentIndexContainer = this._index.indexTo;
-//		if( currentIndexContainer[limitName] === void 0 || currentIndexContainer[limitName] > from ) {
-//			currentIndexContainer[limitName] = from;
-//		}
-//		for( ii = 0, len = indexes.length ; ii < len ; ii++ ) {
-//			let indexValue = indexes[ii] | 0;
-//			if( !currentIndexContainer[indexValue] ) {
-//				currentIndexContainer = currentIndexContainer[indexValue] = [];
-//			}
-//			else {
-//				currentIndexContainer = currentIndexContainer[indexValue];
-//			}
-//			if( currentIndexContainer[limitName] === void 0 || currentIndexContainer[limitName] > from ) {
-//				currentIndexContainer[limitName] = from;
-//			}
-//		}
-//		if( !currentIndexContainer.__value ) {
-//			currentIndexContainer.__value = [];
-//		}
-//		currentIndexContainer.__value.push(fragment);
-	}
-
-	_findRecordFragments(from, to, doNotSort = false) {
-		let result = [];
-
-		let fromPendingValue, toPendingValue;
-
-		let toNumbers_fn = (v) => v | 0;
-
-		let fromKey = from + "";
-		let fromKeys = fromKey.split("").map(toNumbers_fn);
-		let fromDeep = fromKeys.length;
-		let maxLimitName = "__maxTo" + fromDeep;
-
-		let toKey = to + "";
-		let toKeys = toKey.split("");
-		let toDeep = toKeys.length;
-
-//		if( fromDeep > toDeep ) {
-//			throw new Error("'from' value must be <= 'to' value");
-//		}
-//		if( fromDeep > 9 || toDeep > 9 ) {
-//			throw new Error("'from' or 'to' value > 999999999 unsuported");//for 999999999 index file size must be ~1Gib
-//		}
-		if( fromDeep < toDeep ) {
-			toPendingValue = to;
-
-			to = fromKey.replace(/\d/g, "9") | 0;
-
-			fromPendingValue = to + 1;
-		}
-
-		let currentIndex, lastFromNumberIndex = fromDeep - 1;
-		let index = this._index.indexFrom;
-		let lastKey = fromKeys[lastFromNumberIndex];
-
-		while( from <= to ) {
-			if( !currentIndex ) {
-				currentIndex = index;
-				for( let jj = 0, jjKey ; jj < fromDeep - 1 ; jj++ ) {
-					jjKey = fromKeys[jj] | 0;
-					currentIndex = currentIndex[jjKey];
-					if( currentIndex ) {
-						if( currentIndex[maxLimitName] < from ) {
-							//fast check: fragments in this index has changes outside current recort
-							currentIndex = void 0;
-						}
-					}
-					if( !currentIndex ) {
-						break;
-					}
-				}
-			}
-
-			if( currentIndex ) {
-				let currentIndexContainer = currentIndex[lastKey];
-
-				if( currentIndexContainer && currentIndexContainer[maxLimitName] >= from ) {
-					currentIndexContainer = currentIndexContainer.__value;
-					if( currentIndexContainer ) {
-						for( let frag of currentIndexContainer ) {
-							let {to: fragTo} = frag.record;
-
-							if( fragTo <= to ) {
-								result.push(frag);
-							}
-						}
-					}
-				}
-			}
-
-			from++;
-			lastKey = fromKeys[lastFromNumberIndex] = lastKey + 1;
-			if( lastKey > 9 ) {
-				fromKey = from + "";
-				fromKeys = fromKey.split("").map(toNumbers_fn);
-				lastKey = 0;
-				currentIndex = void 0;
-			}
-		}
-
-		if( fromPendingValue ) {
-			result.push(...this._findRecordFragments(fromPendingValue, toPendingValue, true));
-		}
-
-		return doNotSort
-			? result
-			: result.sort( ({__createdIndex: a}, {__createdIndex: b}) => (a - b) )
-		;
-	}
-
-	_findFragmentRecords(fragmentFrom, fragmentTo) {
-		let result = [];
-
-		let toNumbers_fn = (v) => v | 0;
-
-		let intValue = fragmentFrom;
-
-		let fromKey = intValue + "";
-		let fromKeys = fromKey.split("").map(toNumbers_fn);
-		let fromDeep = fromKeys.length;
-		let maxLimitName = "__maxTo" + fromDeep;
-		let minLimitName = "__minFrom" + fromDeep;
-
-		let index = this._index.recordIndexFrom;
-
-		let currentIndex = index
-			, stashedIndexes = []
-			, currentDeep = 1
-			, currentDeepDiff = fromDeep - currentDeep
-		;
-
-		function checkRecords(records) {
-			if( !records ) {
-				return;
-			}
-
-			for( let record of records ) {
-				let {from, to} = record;
-				if( from <= fragmentFrom && to >= fragmentTo ) {
-					result.push(record);
-				}
-			}
-		}
-
-		while( intValue > 0 ) {
-			let keyValue = fromKeys[currentDeep - 1];
-			let indexValue;
-
-			let decrementKeys = true;
-
-			if( indexValue = currentIndex[keyValue] ) {
-				if( indexValue[minLimitName] <= fragmentFrom && indexValue[maxLimitName] >= fragmentTo ) {
-					if( currentDeep === fromDeep ) {
-						checkRecords(indexValue.__value);
-					}
-					else {
-						currentDeep++;
-						currentDeepDiff = fromDeep - currentDeep;
-						stashedIndexes.push(currentIndex);
-						currentIndex = indexValue;
-
-						decrementKeys = false;
-					}
-				}
-			}
-
-			if( decrementKeys ) {
-				let updateKeys = true;
-
-				if( currentDeepDiff ) {
-					intValue = intValue - (1 + (fromKeys.slice(currentDeep).join("") | 0));
-				}
-				else {//max deep
-					intValue--;
-					updateKeys = (fromKeys[currentDeep - 1] = fromKeys[currentDeep - 1] - 1) < 0;
-				}
-
-				if( updateKeys ) {
-					fromKeys = (intValue + "").split("").map(toNumbers_fn);
-
-					if( fromDeep !== fromKeys.length ) {
-						fromDeep = fromKeys.length;
-						maxLimitName = "__maxTo" + fromDeep;
-						minLimitName = "__minFrom" + fromDeep;
-					}
-
-					if( currentDeep > 1 ) {
-						currentIndex = stashedIndexes.pop();
-						currentDeep--;
-						currentDeepDiff = fromDeep - currentDeep;
-					}
-				}
-			}
-		}
-
-		return result;
 	}
 
 	hasChanges() {
@@ -463,13 +445,13 @@ class StringAlter {
 
 		let record = this._records[recordKey] = new Record(from, to);
 
-		this._addRecordToIndex(record, from, to);
+		this._getRecorsIndex.add(from, to, record);
 
-		let recordFragments = this._findRecordFragments(from, to);
+		let recordFragments = this._fragmentsIndex.find(from, to).sort( ({__createdIndex: a}, {__createdIndex: b}) => (a - b) );
 
-		if( recordFragments && recordFragments.length ) {
+		if( recordFragments ) {
 			// [new get logic]
-			record.sub(recordFragments);
+			record.addSubs(...recordFragments);
 		}
 		record._source = this._source;//TODO:: [new get logic] after new get logic completed remove this line
 
@@ -533,7 +515,7 @@ class StringAlter {
 	 */
 	remove(from, to, options) {
 		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-		
+
 		if( this._removedBlocks[from + "|" + to] !== void 0 ) {
 			// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
 			assert(false, 'This string block has already been removed');
@@ -591,7 +573,7 @@ class StringAlter {
 	 */
 	wrap(from, to, start, end, options = {}) {
 		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
-		
+
 		options.group = ++this._fragmentsGroupId;
 
 		let firstInsertOptions = Object.create(options);
@@ -708,14 +690,14 @@ class StringAlter {
 					|| (groupFragExtend && currFragExtend && (from >= lastStart && to <= lastEnd))
 				)
 			) {
-				groupFrag.sub(frag);
+				groupFrag.addSubs(frag);
 				fragments.splice(fragmentsLength, 1);
 			}
 			else if( lastEnd &&	(
 					from < lastStart && to > lastEnd
 					|| (groupFragExtend && currFragExtend && (from <= lastStart && to >= lastEnd)) )
 			) {
-				frag.sub(groupFrag);
+				frag.addSubs(groupFrag);
 				fragments.splice(groupFragIndex, 1);
 				groupFrag = frag;
 				lastStart = from;
@@ -898,7 +880,7 @@ class StringAlter {
 				}
 			}
 
-			let subFragments = frag.sub();
+			let subFragments = frag.getSubs();
 			if( subFragments ) {
 				outsStr += outs.join("");
 
@@ -939,7 +921,7 @@ class StringAlter {
 					}
 					else {
 						let sourceString = record._source.substring(record.from, record.to);//this._source.substring(record.from, record.to);
-						let subFragments = record.sub();
+						let subFragments = record.getSubs();
 						if( subFragments ) {
 							let alter = new StringAlter(sourceString, subFragments, [-record.from]);
 							sourceString = alter.apply(true);
