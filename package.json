@@ -2,7 +2,8 @@
   "name": "string-alter",
   "version": "0.6.3",
   "description": "String alter",
-  "main": "dist/StringAlter.js",
+  "main": "./build/es5/StringAlter.js",
+  "bin": "./build/es5/StringAlter.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/termi/StringAlter.git"
@@ -18,7 +19,7 @@
 
   },
   "devDependencies": {
-
+    "es6-transpiler": "latest"
   },
   "author": "Termi <1+guthub@h123.ru>",
   "license": "MIT"
