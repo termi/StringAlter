@@ -1,6 +1,6 @@
 {
   "name": "string-alter",
-  "version": "0.6.8",
+  "version": "0.7.0",
   "description": "String alter",
   "main": "./build/es5/StringAlter.js",
   "bin": "./build/es5/StringAlter.js",
@@ -18,8 +18,12 @@
   "scripts": {
 
   },
+  "dependencies": {
+
+  },
   "devDependencies": {
-    "es6-transpiler": "latest"
+    "es6-transpiler": "latest",
+     "rangeindex": "latest"
   },
   "author": "Termi <1+guthub@h123.ru>",
   "license": "MIT"
