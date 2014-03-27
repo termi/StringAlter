@@ -59,18 +59,24 @@ class RangeIndex {
 			, fromDeep = fromKeys.length
 			, maxLimitProp = `__maxTo${fromDeep}`;
 
-		let toKey = `${to}`
-			, toKeys = toKey.split("")
+		let localTo
+			, toKeys = `${to}`.split("")
 			, toDeep = toKeys.length
 		;
 
 //		if( fromDeep > 9 || toDeep > 9 ) throw new Error("'from' or 'to' value > 999999999 unsuported");//for 999999999 index file size must be ~1Gib
+
+		// TODO:: Ограничения на максимальное значение to и минимальное значение from из this.indexFrom
+
 		if( fromDeep < toDeep ) {
 			pendingToValue = to;
 
-			to = fromKey.replace(/\d/g, "9") | 0;
+			localTo = fromKey.replace(/\d/g, "9") | 0;
 
-			pendingFromValue = to + 1;
+			pendingFromValue = localTo + 1;
+		}
+		else {
+			localTo = to;
 		}
 
 		let subIndex
@@ -78,7 +84,7 @@ class RangeIndex {
 			, lastKey = fromKeys[lastFromNumberIndex]
 		;
 
-		while( from <= to ) {
+		while( from <= localTo ) {
 			if( !subIndex ) {
 				subIndex = index;
 				for( let fromKeyIndex = 0, fromKey ; fromKeyIndex < fromDeep - 1 ; fromKeyIndex++ ) {
@@ -99,7 +105,7 @@ class RangeIndex {
 			if( subIndex ) {
 				let subIndexContainer = subIndex[lastKey];
 
-				if( subIndexContainer && subIndexContainer[maxLimitProp] >= from ) {
+				if( subIndexContainer && subIndexContainer[maxLimitProp] >= localTo ) {
 					subIndexContainer = subIndexContainer.__data;
 					if( subIndexContainer ) {
 						for( let record of subIndexContainer ) {
@@ -131,30 +137,27 @@ class RangeIndex {
 	}
 
 	findOuter(innerFrom, innerTo = innerFrom, options = {}) {
-		let index = this.indexFrom
-			, result = []
+		const result = []
 			, {onfind} = options
 		;
 
-		let intValue = innerFrom
-			, fromKey = `${intValue}`
-			, fromKeys = [ for( v of fromKey.split("") ) v | 0 ]
+		let intValue = innerFrom | 0
+			, fromKeys = [ for( v of `${intValue}`.split("") ) v | 0 ]
 			, fromDeep = fromKeys.length
 			, maxLimitProp = `__maxTo${fromDeep}`
-			, minLimitName = `__minFrom${fromDeep}`
+			, minLimitProp = `__minFrom${fromDeep}`
 		;
 
-		let subIndex = index
+		let subIndex = this.indexFrom
 			, stashedIndexes = []
 			, currentDeep = 1
 			, currentDeepDiff = fromDeep - currentDeep
 		;
 
 		let checkRecords = (records = []) => {
-			for( let record of records ) {
-				let {from, to} = record;
-				if( from <= innerFrom && to >= innerTo ) {
-					result.push(record.data);
+			for( let {from, to, data} of records ) {
+				if( from <= innerFrom && to >= innerTo && (!onfind || onfind(data, from, to) !== false) ) {
+					result.push(data);
 				}
 			}
 		}
@@ -166,7 +169,7 @@ class RangeIndex {
 			let decrementKeys = true;
 
 			if( indexValue = subIndex[keyValue] ) {
-				if( indexValue[minLimitName] <= innerFrom && indexValue[maxLimitProp] >= innerTo ) {
+				if( indexValue[minLimitProp] <= innerFrom && indexValue[maxLimitProp] >= innerTo ) {
 					if( currentDeep === fromDeep ) {
 						checkRecords(indexValue.__data);
 					}
@@ -198,7 +201,7 @@ class RangeIndex {
 					if( fromDeep !== fromKeys.length ) {
 						fromDeep = fromKeys.length;
 						maxLimitProp = `__maxTo${fromDeep}`;
-						minLimitName = `__minFrom${fromDeep}`;
+						minLimitProp = `__minFrom${fromDeep}`;
 					}
 
 					if( currentDeep > 1 ) {
@@ -257,7 +260,6 @@ class RangeOffset {
 		;
 
 		if( typeof offsetValue === "string" ) {
-			offsetValue += "";
 			let index = offsetValue.indexOf("|");
 			if( index !== -1 ) {//adding
 				addingValue = offsetValue.substr(index + 1) | 0;
@@ -369,7 +371,7 @@ class Record {
 	}
 
 	toString() {
-		return Record.uniqueStart + "[" + this.from + "]" + Record.uniqueSeparator + "[" + this.to + "]" + Record.uniqueEnd;
+		return `${Record.uniqueStart}[${this.from}]${Record.uniqueSeparator}[${this.to}]${Record.uniqueEnd}`;
 	}
 
 	addSubs(...fragments) {
@@ -469,7 +471,7 @@ class Fragment {
 					}
 				}
 
-				let recordKey = from + "|" + to;
+				let recordKey = `${from}|${to}`;
 
 				this.expressions.push(recordsCache[recordKey]);
 				newData.push(data.substring(prevOffset, offset));
@@ -593,7 +595,7 @@ class StringAlter {
 	 * @returns {Record}
 	 */
 	get(from, to) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+		assert(from <= to, `from(${from}) should be <= to(${to})`);
 
 		let recordKey = from + "|" + to;
 		if( this._records[recordKey] ) {
@@ -622,7 +624,7 @@ class StringAlter {
 	 * @returns {string}
 	 */
 	getRange(from, to) {
-		assert(from <= to, 'from(' + from + ') should be <= to(' + to + ')');
+		assert(from <= to, `from(${from}) should be <= to(${to})`);
 		
 		return this._source.substring(from, to);
 	}
@@ -684,7 +686,7 @@ class StringAlter {
 	 * @returns {StringAlter}
 	 */
 	move(srcFrom, srcTo, destination, options) {
-		assert(srcFrom <= srcTo, 'srcFrom(' + srcFrom + ') should be <= srcTo(' + srcTo + ')');
+		assert(srcFrom <= srcTo, `srcFrom(${srcFrom}) should be <= srcTo(${srcTo})`);
 
 		this.remove(srcFrom, srcTo);
 		this.insert(destination, this.get(srcFrom, srcTo), options);
@@ -729,6 +731,7 @@ class StringAlter {
 		return this;
 	}
 
+	/** @deprecated */
 	setState(newStateName) {
 		if( !this._fragmentStates[newStateName] ) {
 			this._fragmentStatesArray.push(this._fragmentStates[newStateName] = []);
@@ -743,6 +746,7 @@ class StringAlter {
 		return this;
 	}
 
+	/** @deprecated */
 	restoreState() {
 		var frags = this._fragmentStates[this.__currentStateName = this.__prevStateName];
 		if( frags ) {
@@ -943,9 +947,9 @@ class StringAlter {
 			assert(
 				pos <= from
 					|| from === to//nothing to remove
-				, "'pos' (" + pos + ") shoulde be <= 'start' (" + from + ") or 'start' (" + from + ") == 'end' (" + to + ")"
+				, `'pos' (${pos}) shoulde be <= 'start' (${from}) or 'start' (${from}) == 'end' (${to})`
 			);
-			assert(from <= to, "from (" + from + ") should be <= to (" + to + ")");
+			assert(from <= to, `from (${from}) should be <= to (${to})`);
 
 			if( fragOptions.applyChanges && expressionsLength ) {
 				let anotherFrag;
@@ -1124,7 +1128,7 @@ class StringAlter {
 					fragment.setOptions({"inactive": true});
 				}
 				else {
-					assert(false, 'from(' + from + ') should be <= to(' + to + ')');
+					assert(false, `from(${from}) should be <= to(${to})`);
 				}
 			}
 		}
