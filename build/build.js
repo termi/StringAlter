@@ -11,6 +11,9 @@ const es6transpiler = require('es6-transpiler')
 	, devDependencies = ['rangeindex']//Object.keys(_package["devDependencies"])
 ;
 
+// for build.js in prepare mode
+const NODE_MODULES_ROOT = path.basename(path.join(__dirname, '..', '..')) === "npm" ? path.join(__dirname, '..', '..', '..') : "";
+
 console.log('Beginning ' + _package.name + '(version ' + BUILD_VERSION + ') build');
 
 let depsMap = {};
@@ -19,11 +22,12 @@ function loadDepContent(dep) {
 	if ( depsMap[dep] !== void 0 )return depsMap[dep];
 
 	let content = null;
+	const nodeModulesDir = path.join(NODE_MODULES_ROOT, '../node_modules/');
 
-	fs.readdirSync('../node_modules/').some(function(folder) {
+	fs.readdirSync(nodeModulesDir).some(function(folder) {
 		if ( folder.charAt(0) === '.' )return false;
 
-		folder = path.join('../node_modules/', folder);
+		folder = path.join(nodeModulesDir, folder);
 
 		if ( fs.statSync(folder).isDirectory() ) {
 			let _package = require(path.join(folder, 'package.json'));
