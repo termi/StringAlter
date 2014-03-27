@@ -879,6 +879,41 @@ describe('StringAlter', function() {
 			expect(result).toEqual("var a = [1, 2];\n\rfunction t() {function ITER$0(v){return v}var arr = arguments[0];if(arr === void 0)arr = [ ].concat(ITER$0(a, true), ITER$0((function(b){var a = b[0], b = ((b = b[1]) === void 0 ? 4 : b);var c = arguments[1];if(c === void 0)c = 3;return [a, b, c]})([a[1]+1])), ITER$0(a.reverse()));  }");
 		});
 
+		it("7", function() {
+			var string = 'const a = 1;\r\n\
+\r\n\
+function matchAttributes(attributes) {\r\n\
+    for( let attrRule of attributes ) {\r\n\
+\r\n\
+    }\r\n\
+}';
+
+			var alter = new StringAlter(string);
+			alter
+				.replace(0, 5, "var")
+				.replace(65, 68, "var")
+				.insertBefore(54, "function GET_ITER$0(v){return v};")
+				.insertBefore(54, "var $D$0;")
+				.insertBefore(54, "var $D$1;")
+				.insertBefore(54, "var $D$2;")
+				.insert(60, "$D$0 = GET_ITER$0(attributes);$D$1 = $D$0 === 0;$D$2 = ($D$1 ? attributes.length : void 0);", { extend: true, applyChanges: true })
+				.insertBefore(95, 'attrRule = ($D$1 ? attributes[$D$0++] : $D$2["value"]);')
+				.insert(104, ";$D$0 = $D$1 = $D$2 = void 0;", { extend: true, applyChanges: true })
+			;
+			alter.setState('test');
+			alter.replace(78, 94, '; $D$1 ? ($D$0 < $D$2) : !($D$2 = $D$0["next"]())["done"]; )')
+			alter.restoreState('test');
+
+			var result = alter.apply();
+			expect(result).toEqual('var a = 1;\r\n\
+\r\n\
+function matchAttributes(attributes) {function GET_ITER$0(v){return v};var $D$0;var $D$1;var $D$2;\r\n\
+    $D$0 = GET_ITER$0(attributes);$D$1 = $D$0 === 0;$D$2 = ($D$1 ? attributes.length : void 0);for( var attrRule ; $D$1 ? ($D$0 < $D$2) : !($D$2 = $D$0["next"]())["done"]; ){attrRule = ($D$1 ? attributes[$D$0++] : $D$2["value"]);\r\n\
+\r\n\
+    };$D$0 = $D$1 = $D$2 = void 0;\r\n\
+}');
+		});
+
 		it("using transform", function() {
 			var string = '\n\r'
 				+ '{\n\r'
