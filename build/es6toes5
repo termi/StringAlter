@@ -1,2 +1,5 @@
 #!/usr/bin/env node
-require("es6-transpiler").run({filename: process.argv[2], outputToConsole: !process.argv[3], outputFilename: process.argv[3]/*, resetUnCapturedVariables: true*/});
+var res = require("es6-transpiler").run({filename: process.argv[2], outputToConsole: !process.argv[3], outputFilename: process.argv[3]/*, resetUnCapturedVariables: true*/});
+if(res.errors && res.errors.length) {
+  console.error.apply(console, res.errors);
+}
