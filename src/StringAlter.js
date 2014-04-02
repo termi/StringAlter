@@ -173,7 +173,7 @@ class Record {
 		}
 	}
 
-	getSubs(fragment) {
+	getSubs() {
 		return this.subs;
 	}
 }
@@ -398,7 +398,7 @@ class StringAlter {
 
 		let recordFragments = this._fragmentsIndex.find(from, to).sort( ({__createdIndex: a}, {__createdIndex: b}) => (a - b) );
 
-		if( recordFragments ) {
+		if( recordFragments && recordFragments.length ) {
 			// [new get logic]
 			record.addSubs(...recordFragments);
 		}
@@ -882,7 +882,7 @@ class StringAlter {
 	printFragments(fragments = this._fragments) {
 		let result = [];
 		for( let frag of fragments ) {
-			let {type, record} = frag, {remove, insert} = Fragment.Types
+			let {type, record} = frag, {remove, insert} = Fragment.Types;
 
 			result.push(
 				`${remove === type ? "REMOVE" : insert === type ? "INSERT" : "REPLACE"}:\t`
