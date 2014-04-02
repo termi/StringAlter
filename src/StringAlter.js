@@ -421,6 +421,14 @@ class StringAlter {
 
 	/**
 	 *
+	 * @returns {string}
+	 */
+	getSource() {
+		return this._source;
+	}
+
+	/**
+	 *
 	 * @param to
 	 * @param data
 	 * @param {Object=} options
