@@ -1223,6 +1223,19 @@ function matchAttributes(attributes) {function GET_ITER$0(v){return v};var $D$0;
 	describe("__ NEW FEATURES __", function() {
 		describe("new apply sequence logic", function() {
 			it("inner changes before get", function() {
+				var string = 'var A = 1;\r\nfunction test4(a = {A}){ return A }';
+				var expectedResult = 'var A = 1;\r\nfunction test4(){var a = {A: A} return A }';
+				var alter = new StringAlter(string);
+				alter
+					.insert(33, ': A')
+					.remove(27, 34)
+					.insert(36, 'var a = ' + alter.get(31, 34), {"__newTransitionalSubLogic":true})
+				;
+				var result = alter.apply();
+				expect(result).toEqual(expectedResult);
+			});
+
+			it("inner changes before get #2", function() {
 				var string =
 						'function test0(y = 1, [{x}, {z}] = [{x: 2}, {z: 3}]) {\n\r'
 							+ '\n\r'
