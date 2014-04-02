@@ -47,7 +47,7 @@ The fragments does not need to be sorted but must not overlap. More examples in 
 
 ## API
 ```javascript
-var alter = new StringAlter(string: source, Object: options?);
+var alter = new StringAlter(source: string, options: Object?);
 // options is optional. See 'StringAlter options'
 ```
 
