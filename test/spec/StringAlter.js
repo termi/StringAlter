@@ -1149,6 +1149,31 @@ function matchAttributes(attributes) {function GET_ITER$0(v){return v};var $D$0;
 			expect(result).toEqual(expectedResult);
 		});
 
+		it("replace with inner remove", function() {
+			var string = 'var _arr = [];var arr = [6, ...[..._arr], ...[..._arr]];';
+			var expectedResult = 'function ITER$0(v){return v};var _arr = [];var arr = [6].concat(ITER$0(_arr), ITER$0(_arr));';
+
+			var alter = new StringAlter(string);
+			alter
+				.insert(0, 'function ITER$0(v){return v};')
+
+				.remove(28, 32)
+				.remove(39, 40)
+				.replace(26, 35, "].concat(ITER$0(")
+				.insert(39, ')')
+
+				.remove(42, 46)
+				.remove(53, 54)
+				.replace(39, 49, ", ITER$0(")
+				.insert(53, ')')
+
+				.replace(54, 55, ")")
+			;
+
+			var result = alter.apply();
+			expect(result).toEqual(expectedResult);
+		});
+
 		it("wrap/insert", function() {
 			var string =
 				'var x = (c = 9) =>c;' +

@@ -125,9 +125,14 @@ class RangeOffset {
 
 				if( offset <= originalTo ) {// must be <=
 					if( offset <= originalFrom) {// must be <=
-						if( considerExtends || offset !== originalFrom ) {
+						if( offset !== originalFrom ) {
 							from += extendValue;
 						}
+						else if ( considerExtends && extendValue > 0 ) {
+							// positive extend could move from position in this case
+							from += extendValue;
+						}
+
 						if( addingValue ) {
 							from += addingValue;
 						}
