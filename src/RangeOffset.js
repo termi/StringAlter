@@ -7,17 +7,17 @@ class RangeOffset {
 		this.offsets = offsets;
 	}
 
-	addInsert(to, offset) {
-		this.addRange(to, to, offset, true);
+	addInsert(to, offset, isSpecialOffset) {
+		this.addRange(to, to, offset, true, isSpecialOffset);
 	}
 
-	addRemove(from, to) {
+	addRemove(from, to, isSpecialOffset) {
 		while( from++ < to ) {
-			this.addRange(void 0, from, -1);
+			this.addRange(void 0, from, -1, void 0, isSpecialOffset);
 		}
 	}
 
-	addRange(from, to, offset, newIsAdding = false) {
+	addRange(from, to, offset, newIsAdding = false, isSpecialOffset = false) {
 		if( !offset ) {
 			return;
 		}
@@ -33,7 +33,14 @@ class RangeOffset {
 			// TODO:: new logic [END]
 
 			// this is an old logic:
-			from = from + (-offset - 1);
+			if ( isSpecialOffset ) {
+				// for cases with sub fragments
+				// TODO:: tests
+				from = to;
+			}
+			else {
+				from = from + (-offset - 1);
+			}
 		}
 
 

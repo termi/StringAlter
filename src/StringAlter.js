@@ -589,6 +589,8 @@ class StringAlter {
 				}
 			}
 
+
+			let isSubFragmentsOffset = false;
 			let subFragments = frag.getSubs();
 			if( subFragments ) {
 				outsStr += outs.join("");
@@ -610,6 +612,8 @@ class StringAlter {
 
 				({from, to}) = offsets.getRecord(frag.record);
 				outs = [];
+
+				isSubFragmentsOffset = true;
 			}
 
 			let string;
@@ -678,10 +682,10 @@ class StringAlter {
 			let newIsAdding = to === from && !fragOptions.extend;
 
 			if( newIsAdding ) {
-				offsets.addInsert(frag.record.from, offset);
+				offsets.addInsert(frag.record.from, offset, isSubFragmentsOffset);
 			}
 			else {
-				offsets.addRange(frag.record.from, frag.record.to, offset);
+				offsets.addRange(frag.record.from, frag.record.to, offset, void 0, isSubFragmentsOffset);
 			}
 
 			if( pos !== from ) {
