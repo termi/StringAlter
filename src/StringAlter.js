@@ -734,7 +734,7 @@ class StringAlter {
 		return result;
 	}
 
-	checkFragmentRange(fragment) {
+	checkFragmentRange(fragment) {//TODO:: warnings
 		// TODO:: check methods 'move', 'replace', etc for calling with the same parameters, what is the function already was called
 
 		const REMOVE = Fragment.Types.remove;
@@ -770,7 +770,7 @@ class StringAlter {
 						fragment.setOptions({"inactive": true});
 					}
 					else {
-						assert(false, 'This string block has already been removed');
+						assert(false, `This string block(${from}, ${to}) has already been removed`);
 					}
 				}
 			}
