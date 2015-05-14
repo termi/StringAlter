@@ -2,6 +2,7 @@
 Alters a string by replacing multiple range fragments in one fast pass.
 Works in node and browsers.
 
+![String Alter](http://i.picresize.com/images/2015/05/14/WBwOG.jpg)
 
 
 ## Usage
